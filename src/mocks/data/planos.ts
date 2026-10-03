@@ -1,0 +1,86 @@
+import type { Plano, TabelaPublicidade } from "@/lib/api/types";
+
+export const PLANOS: Plano[] = [
+  {
+    id: "1",
+    slug: "gratis",
+    nome: "Plano Grátis",
+    preco_mensal: 0,
+    imoveis: 1,
+    fotos: 5,
+    destaques: 0,
+    pagina_imobiliaria: false,
+    encomenda: false,
+    hotsite: false,
+    recomendado: false,
+    exclusivo_proprietario: true,
+  },
+  {
+    id: "3",
+    slug: "bronze",
+    nome: "Plano Bronze",
+    preco_mensal: 90,
+    imoveis: 20,
+    fotos: 10,
+    destaques: 5,
+    pagina_imobiliaria: true,
+    encomenda: false,
+    hotsite: false,
+    recomendado: false,
+    exclusivo_proprietario: false,
+  },
+  {
+    id: "4",
+    slug: "prata",
+    nome: "Plano Prata",
+    preco_mensal: 158,
+    imoveis: 100,
+    fotos: 20,
+    destaques: 10,
+    pagina_imobiliaria: true,
+    encomenda: true,
+    hotsite: true,
+    recomendado: true,
+    exclusivo_proprietario: false,
+  },
+  {
+    id: "5",
+    slug: "ouro",
+    nome: "Plano Ouro",
+    preco_mensal: 258,
+    imoveis: 250,
+    fotos: 30,
+    destaques: 15,
+    pagina_imobiliaria: true,
+    encomenda: true,
+    hotsite: true,
+    recomendado: false,
+    exclusivo_proprietario: false,
+  },
+  {
+    id: "6",
+    slug: "max",
+    nome: "Plano Max",
+    preco_mensal: null,
+    imoveis: 1000,
+    fotos: 50,
+    destaques: 20,
+    pagina_imobiliaria: true,
+    encomenda: true,
+    hotsite: true,
+    recomendado: false,
+    exclusivo_proprietario: false,
+  },
+];
+
+export const TABELA_PUBLICIDADE: TabelaPublicidade[] = [
+  { codigo: "PH1", pagina: "Home", tipo: "Pop-up", tamanho: "800x400", observacao: "Exibido uma vez por sessão", preco_mensal: 200 },
+  { codigo: "BH1", pagina: "Home", tipo: "Banner horizontal", tamanho: "1140x120", observacao: "Abaixo da busca", preco_mensal: 150 },
+  { codigo: "BL1", pagina: "Lista de imóveis", tipo: "Banner horizontal", tamanho: "1140x120", observacao: "Entre os resultados", preco_mensal: 120 },
+  { codigo: "BL2", pagina: "Lista de imóveis", tipo: "Banner lateral", tamanho: "300x600", observacao: "Coluna direita", preco_mensal: 100 },
+  { codigo: "BD1", pagina: "Detalhe do imóvel", tipo: "Banner horizontal", tamanho: "728x90", observacao: "Abaixo da galeria", preco_mensal: 100 },
+];
+
+export function planoPorId(id: string) {
+  return PLANOS.find((p) => p.id === id);
+}
