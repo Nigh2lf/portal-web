@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Building, Megaphone, Sparkles, TrendingUp, UserRound, Wallet } from "lucide-react";
-import type { HomeDados, Portal } from "@/lib/api/types";
+import type { BairroMaisAnunciado, HomeTopo, ImovelResumo, PesquisaPopular, Portal } from "@/lib/api/types";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/layout/container";
 import { ListaImoveis } from "@/features/imoveis/components/lista-imoveis";
@@ -11,7 +11,7 @@ import type { ComponentProps } from "react";
 
 type PropsBusca = ComponentProps<typeof BuscaHomeForm>;
 
-export function HeroHome({ portal, home, busca }: { portal: Portal; home: HomeDados; busca: PropsBusca }) {
+export function HeroHome({ portal, home, busca }: { portal: Portal; home: HomeTopo; busca: PropsBusca }) {
   return (
     <section className="relative isolate overflow-hidden bg-brand text-brand-foreground">
       <Image src={home.hero_imagem_url} alt="" fill priority sizes="100vw" className="object-cover opacity-50" />
@@ -48,8 +48,8 @@ export function SecaoTitulo({ titulo, descricao, icone: Icone, acao }: { titulo:
   );
 }
 
-export function SecaoDestaques({ home, portal, favoritos }: { home: HomeDados; portal: Portal; favoritos: string[] }) {
-  if (!home.destaques.length) return null;
+export function SecaoDestaques({ destaques, portal, favoritos }: { destaques: ImovelResumo[]; portal: Portal; favoritos: string[] }) {
+  if (!destaques.length) return null;
   return (
     <section className="py-12 sm:py-16">
       <Container>
@@ -66,20 +66,20 @@ export function SecaoDestaques({ home, portal, favoritos }: { home: HomeDados; p
             </Button>
           }
         />
-        <ListaImoveis imoveis={home.destaques} favoritos={favoritos} portalNome={portal.nome} colunas={4} />
+        <ListaImoveis imoveis={destaques} favoritos={favoritos} portalNome={portal.nome} colunas={4} />
       </Container>
     </section>
   );
 }
 
-export function SecaoMaisProcurados({ home }: { home: HomeDados }) {
-  if (!home.mais_procurados.length) return null;
+export function SecaoMaisProcurados({ pesquisas }: { pesquisas: PesquisaPopular[] }) {
+  if (!pesquisas.length) return null;
   return (
     <section className="bg-brand-soft/50 py-12 sm:py-16">
       <Container>
         <SecaoTitulo titulo="Imóveis mais procurados" descricao="As buscas mais feitas pelos visitantes nos últimos dias." icone={TrendingUp} />
         <ul className="flex flex-wrap gap-2.5">
-          {home.mais_procurados.map((p) => (
+          {pesquisas.map((p) => (
             <li key={p.href}>
               <Link href={p.href} className="group flex items-center gap-2 rounded-full border bg-card px-4 py-2 text-sm shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand/40 hover:text-brand hover:shadow">
                 {p.label}
@@ -93,14 +93,14 @@ export function SecaoMaisProcurados({ home }: { home: HomeDados }) {
   );
 }
 
-export function SecaoBairros({ home }: { home: HomeDados }) {
-  if (!home.bairros_mais_anunciados.length) return null;
+export function SecaoBairros({ bairros }: { bairros: BairroMaisAnunciado[] }) {
+  if (!bairros.length) return null;
   return (
     <section className="py-12 sm:py-16">
       <Container>
         <SecaoTitulo titulo="Bairros mais anunciados" descricao="Explore os bairros com mais imóveis disponíveis." icone={Building} />
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          {home.bairros_mais_anunciados.map(({ bairro, cidade, href }) => (
+          {bairros.map(({ bairro, cidade, href }) => (
             <li key={`${cidade.id}-${bairro.id}`}>
               <Link href={href} className="card-elevated card-elevated-hover flex h-full flex-col justify-between gap-2 p-4">
                 <span>

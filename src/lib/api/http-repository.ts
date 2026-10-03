@@ -10,6 +10,7 @@ import type {
   EstatisticaMensal,
   EstatisticaPeriodo,
   HomeDados,
+  HomeTopo,
   Imovel,
   ImovelPayload,
   Mensagem,
@@ -283,29 +284,47 @@ export class HttpRepository implements PortalRepository {
 
   // ------------------------------------------------------------------- home
   async getHome(portalId: string): Promise<HomeDados> {
+    const [topo, destaques, mais_procurados, bairros_mais_anunciados] = await Promise.all([
+      this.getHomeTopo(portalId),
+      this.listDestaques(portalId),
+      this.getPesquisasPopulares(portalId, 15),
+      this.listBairrosMaisAnunciados(portalId),
+    ]);
+    return { ...topo, destaques, mais_procurados, bairros_mais_anunciados };
+  }
+
+  async getHomeTopo(portalId: string): Promise<HomeTopo> {
     const slug = await this.slugDoPortal(portalId);
-    const portal = this.portaisPorId.get(portalId) ?? (await this.getPortalBySlug(slug));
     const base = `/public/portals/${slug}`;
-    const [destaques, buscas, bairros, banners, anuncios] = await Promise.all([
-      this.request<ApiPropertyCard[]>(`${base}/featured-properties/?limit=12`, { tags: tagsCache("home", slug) }),
-      this.request<ApiTopSearch[]>(`${base}/top-searches/?limit=15`, { tags: tagsCache("home", slug), revalidate: 900 }),
-      this.request<ApiTopNeighborhood[]>(`${base}/top-neighborhoods/?limit=15`, { tags: tagsCache("home", slug) }),
+    const [portal, banners, anuncios] = await Promise.all([
+      this.portaisPorId.get(portalId) ?? this.getPortalBySlug(slug),
       this.request<ApiBanner[]>(`${base}/banners/`, { tags: tagsCache("content", slug) }),
       this.request<ApiAd[]>(`${base}/ads/?page=HOME`, { tags: tagsCache("content", slug) }),
     ]);
-    const cidadeId = portal?.cidade_principal_id ?? "";
     const comImagem = banners.filter((b) => b.home_image_url);
     const banner = comImagem.length ? comImagem[Math.floor(Math.random() * comImagem.length)] : null;
     const pubs = anuncios.map((a) => mapPublicidade(a, portalId));
     return {
-      destaques: destaques.map(mapImovelResumo),
-      mais_procurados: buscas.map(mapPesquisaPopular),
-      bairros_mais_anunciados: bairros.map((b) => mapBairroMaisAnunciado(b, cidadeId)),
       total_imoveis: portal?.total_imoveis ?? 0,
       hero_imagem_url: banner?.home_image_url ?? "/portais/hero-padrao.jpg",
       banner_home: pubs.find((p) => p.categoria === "banner_home") ?? null,
       popup_home: pubs.find((p) => p.categoria === "popup_home") ?? null,
     };
+  }
+
+  async listDestaques(portalId: string) {
+    const slug = await this.slugDoPortal(portalId);
+    const lista = await this.request<ApiPropertyCard[]>(`/public/portals/${slug}/featured-properties/?limit=12`, { tags: tagsCache("home", slug) });
+    return lista.map(mapImovelResumo);
+  }
+
+  async listBairrosMaisAnunciados(portalId: string) {
+    const slug = await this.slugDoPortal(portalId);
+    const [portal, lista] = await Promise.all([
+      this.portaisPorId.get(portalId) ?? this.getPortalBySlug(slug),
+      this.request<ApiTopNeighborhood[]>(`/public/portals/${slug}/top-neighborhoods/?limit=15`, { tags: tagsCache("home", slug) }),
+    ]);
+    return lista.map((b) => mapBairroMaisAnunciado(b, portal?.cidade_principal_id ?? ""));
   }
 
   async getPublicidade(portalId: string, categoria: Publicidade["categoria"]) {
@@ -360,17 +379,31 @@ export class HttpRepository implements PortalRepository {
   async getImovel(portalId: string, slugOuId: string): Promise<ImovelDetalhe | null> {
     const slug = await this.slugDoPortal(portalId);
     try {
-      const r = await this.request<{ property: ApiPropertyDetail; related: ApiPropertyCard[]; related_links: ApiRelatedLink[] }>(
-        `/public/portals/${slug}/properties/${encodeURIComponent(slugOuId)}/`,
+      // Relacionados vêm à parte (`listRelacionados`), para a página aparecer antes.
+      const r = await this.request<{ property: ApiPropertyDetail; related_links: ApiRelatedLink[] }>(
+        `/public/portals/${slug}/properties/${encodeURIComponent(slugOuId)}/?related=0`,
       );
       return {
         imovel: mapImovel(r.property, portalId),
         anunciante: mapAnuncianteResumo(r.property.advertiser),
-        relacionados: r.related.map(mapImovelResumo),
         links_relacionados: r.related_links.map(mapLinkRelacionado),
       };
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }
+  }
+
+  async listRelacionados(portalId: string, slugOuId: string) {
+    const slug = await this.slugDoPortal(portalId);
+    try {
+      const lista = await this.request<ApiPropertyCard[]>(`/public/portals/${slug}/properties/${encodeURIComponent(slugOuId)}/related/`, {
+        tags: tagsCache("listing", slug),
+        revalidate: 900,
+      });
+      return lista.map(mapImovelResumo);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return [];
       throw e;
     }
   }

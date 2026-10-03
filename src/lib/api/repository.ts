@@ -13,7 +13,9 @@ import type {
   EncomendaPayload,
   EstatisticaMensal,
   EstatisticaPeriodo,
+  BairroMaisAnunciado,
   HomeDados,
+  HomeTopo,
   Imovel,
   ImovelPayload,
   ImovelResumo,
@@ -39,7 +41,6 @@ import type {
 export interface ImovelDetalhe {
   imovel: Imovel;
   anunciante: AnuncianteResumo;
-  relacionados: ImovelResumo[];
   links_relacionados: PesquisaPopular[];
 }
 
@@ -74,6 +75,10 @@ export interface PortalRepository {
 
   // Público
   getHome(portalId: string): Promise<HomeDados>;
+  getHomeTopo(portalId: string): Promise<HomeTopo>;
+  listDestaques(portalId: string): Promise<ImovelResumo[]>;
+  listBairrosMaisAnunciados(portalId: string): Promise<BairroMaisAnunciado[]>;
+  listRelacionados(portalId: string, slugOuId: string): Promise<ImovelResumo[]>;
   buscarImoveis(portalId: string, filtros: BuscaFiltros): Promise<BuscaResultado>;
   getImovel(portalId: string, slugOuId: string, opts?: { preview?: boolean; anuncianteId?: string }): Promise<ImovelDetalhe | null>;
   listImoveisPorIds(portalId: string, ids: string[]): Promise<ImovelResumo[]>;

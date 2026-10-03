@@ -13,7 +13,9 @@ import type {
   EncomendaPayload,
   EstatisticaMensal,
   EstatisticaPeriodo,
+  BairroMaisAnunciado,
   HomeDados,
+  HomeTopo,
   Imovel,
   ImovelPayload,
   ImovelResumo,
@@ -223,13 +225,38 @@ export class MockRepository implements PortalRepository {
 
   // ------------------------------------------------------------------ público
   async getHome(portalId: string): Promise<HomeDados> {
+    const [topo, destaques, mais_procurados, bairros_mais_anunciados] = await Promise.all([
+      this.getHomeTopo(portalId),
+      this.listDestaques(portalId),
+      this.getPesquisasPopulares(portalId, 15),
+      this.listBairrosMaisAnunciados(portalId),
+    ]);
+    return { ...topo, destaques, mais_procurados, bairros_mais_anunciados };
+  }
+
+  async getHomeTopo(portalId: string): Promise<HomeTopo> {
     const portal = this.portal(portalId);
-    const publicados = this.publicadosDoPortal(portal);
+    return {
+      total_imoveis: Math.max(this.publicadosDoPortal(portal).length, portal.total_imoveis),
+      hero_imagem_url: fotoUrl(`hero-${portal.slug}`, 1920, 900),
+      banner_home: await this.getPublicidade(portalId, "banner_home"),
+      popup_home: await this.getPublicidade(portalId, "popup_home"),
+    };
+  }
+
+  async listDestaques(portalId: string) {
+    const portal = this.portal(portalId);
     const rnd = criarRandom(Number(portal.id.slice(-4)) || 1);
-    const destaques = rnd.shuffle(publicados.filter((i) => i.tipo_anuncio !== "normal" && i.fotos.length)).slice(0, 12).map((i) => this.resumo(i));
+    return rnd
+      .shuffle(this.publicadosDoPortal(portal).filter((i) => i.tipo_anuncio !== "normal" && i.fotos.length))
+      .slice(0, 12)
+      .map((i) => this.resumo(i));
+  }
+
+  async listBairrosMaisAnunciados(portalId: string): Promise<BairroMaisAnunciado[]> {
     const porBairro = new Map<string, number>();
-    for (const i of publicados) porBairro.set(i.bairro_id, (porBairro.get(i.bairro_id) ?? 0) + 1);
-    const bairros = [...porBairro.entries()]
+    for (const i of this.publicadosDoPortal(this.portal(portalId))) porBairro.set(i.bairro_id, (porBairro.get(i.bairro_id) ?? 0) + 1);
+    return [...porBairro.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 15)
       .map(([id]) => {
@@ -237,15 +264,20 @@ export class MockRepository implements PortalRepository {
         const cidade = CIDADES.find((c) => c.id === bairro.cidade_id)!;
         return { bairro: { ...bairro, total_imoveis: porBairro.get(id)! }, cidade, href: linkBusca({ cidade: cidade.slug, bairro: bairro.slug }) };
       });
-    return {
-      destaques,
-      mais_procurados: await this.getPesquisasPopulares(portalId, 15),
-      bairros_mais_anunciados: bairros,
-      total_imoveis: Math.max(publicados.length, portal.total_imoveis),
-      hero_imagem_url: fotoUrl(`hero-${portal.slug}`, 1920, 900),
-      banner_home: await this.getPublicidade(portalId, "banner_home"),
-      popup_home: await this.getPublicidade(portalId, "popup_home"),
-    };
+  }
+
+  async listRelacionados(portalId: string, slugOuId: string) {
+    const portal = this.portal(portalId);
+    const imovel = getStore().imoveis.find((i) => i.slug === slugOuId || i.id === slugOuId || i.codigo.toLowerCase() === slugOuId.toLowerCase());
+    if (!imovel) return [];
+    const objetivo: Objetivo = imovel.preco_venda ? "comprar" : imovel.preco_locacao ? "alugar" : "temporada";
+    const preco = precoPorObjetivo(imovel, objetivo) ?? 0;
+    return this.publicadosDoPortal(portal)
+      .filter((i) => i.id !== imovel.id && i.tipo_id === imovel.tipo_id && i.cidade_id === imovel.cidade_id && precoPorObjetivo(i, objetivo))
+      .map((i) => ({ i, dist: Math.abs((precoPorObjetivo(i, objetivo) ?? 0) - preco) }))
+      .sort((x, y) => x.dist - y.dist)
+      .slice(0, 6)
+      .map(({ i }) => this.resumo(i));
   }
 
   async buscarImoveis(portalId: string, f: BuscaFiltros): Promise<BuscaResultado> {
@@ -293,15 +325,6 @@ export class MockRepository implements PortalRepository {
     if (!a) return null;
     if (!opts.preview) imovel.visualizacoes += 1;
 
-    const objetivo: Objetivo = imovel.preco_venda ? "comprar" : imovel.preco_locacao ? "alugar" : "temporada";
-    const preco = precoPorObjetivo(imovel, objetivo) ?? 0;
-    const relacionados = this.publicadosDoPortal(portal)
-      .filter((i) => i.id !== imovel.id && i.tipo_id === imovel.tipo_id && i.cidade_id === imovel.cidade_id && precoPorObjetivo(i, objetivo))
-      .map((i) => ({ i, dist: Math.abs((precoPorObjetivo(i, objetivo) ?? 0) - preco) }))
-      .sort((x, y) => x.dist - y.dist)
-      .slice(0, 6)
-      .map(({ i }) => this.resumo(i));
-
     const cidade = CIDADES.find((c) => c.id === imovel.cidade_id)!;
     const bairro = BAIRROS.find((b) => b.id === imovel.bairro_id)!;
     const tipo = TIPOS.find((t) => t.id === imovel.tipo_id)!;
@@ -310,7 +333,7 @@ export class MockRepository implements PortalRepository {
       { label: `${o.label} ${tipo.nome} em ${cidade.nome}`, href: linkBusca({ objetivo: o.valor, tipo: tipo.slug, cidade: cidade.slug }), total: 0 },
     ]).concat([{ label: `Todos os imóveis em ${bairro.nome}`, href: linkBusca({ cidade: cidade.slug, bairro: bairro.slug }), total: 0 }]);
 
-    return { imovel, anunciante: this.resumoAnunciante(a, portal), relacionados, links_relacionados: links };
+    return { imovel, anunciante: this.resumoAnunciante(a, portal), links_relacionados: links };
   }
 
   async listImoveisPorIds(portalId: string, ids: string[]) {

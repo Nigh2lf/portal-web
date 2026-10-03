@@ -347,14 +347,20 @@ export interface PesquisaPopular {
   total: number;
 }
 
-export interface HomeDados {
-  destaques: ImovelResumo[];
-  mais_procurados: PesquisaPopular[];
-  bairros_mais_anunciados: Array<{ bairro: Bairro; cidade: Cidade; href: string }>;
+export type BairroMaisAnunciado = { bairro: Bairro; cidade: Cidade; href: string };
+
+/** Parte da home que aparece de imediato (hero, banner e popup); as seções chegam em seguida. */
+export interface HomeTopo {
   total_imoveis: number;
   hero_imagem_url: string;
   banner_home: Publicidade | null;
   popup_home: Publicidade | null;
+}
+
+export interface HomeDados extends HomeTopo {
+  destaques: ImovelResumo[];
+  mais_procurados: PesquisaPopular[];
+  bairros_mais_anunciados: BairroMaisAnunciado[];
 }
 
 export interface UsoPlano {

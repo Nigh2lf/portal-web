@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, Suspense } from "react";
 import Link from "next/link";
 import { Building, Check, Clock3, Eye, Hash, Info, MapPin, Star } from "lucide-react";
 import type { ImovelDetalhe } from "@/lib/api/repository";
@@ -6,7 +6,6 @@ import type { Portal } from "@/lib/api/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
-import { Button } from "@/components/ui/button";
 import { Container } from "@/components/layout/container";
 import { ContatarForm } from "@/features/contatar/components/contatar-form";
 import { FavoritoButton } from "@/features/favoritos/components/favorito-button";
@@ -18,8 +17,8 @@ import { AnuncianteBox } from "./anunciante-box";
 import { CaracteristicasIcones } from "./caracteristicas-icones";
 import { Compartilhar } from "./compartilhar";
 import { GaleriaImovel } from "./galeria-imovel";
-import { ListaImoveis } from "./lista-imoveis";
 import { SUFIXO_PRECO, objetivosDisponiveis, precoPorObjetivo } from "./preco-imovel";
+import { RelacionadosImovel, RelacionadosImovelSkeleton } from "./relacionados-imovel";
 
 interface Props {
   portal: Portal;
@@ -29,7 +28,7 @@ interface Props {
 }
 
 export function DetalheImovel({ portal, detalhe, favoritos, preview }: Props) {
-  const { imovel, anunciante, relacionados, links_relacionados } = detalhe;
+  const { imovel, anunciante, links_relacionados } = detalhe;
   const url = urlAbsoluta(portal, `/imovel/${imovel.slug}`);
   const objetivos = objetivosDisponiveis(imovel);
   const crumbs = [
@@ -191,19 +190,15 @@ export function DetalheImovel({ portal, detalhe, favoritos, preview }: Props) {
           </aside>
         </div>
 
-        {relacionados.length > 0 && (
-          <section className="mt-14" aria-labelledby="relacionados">
-            <div className="mb-5 flex items-end justify-between gap-3">
-              <h2 id="relacionados" className="text-2xl font-bold text-brand">
-                Imóveis relacionados
-              </h2>
-              <Button asChild variant="ghost" className="text-brand">
-                <Link href={linkBusca({ objetivo: objetivos[0], tipo: slugify(imovel.tipo_nome), cidade: slugify(imovel.cidade_nome) })}>Ver mais</Link>
-              </Button>
-            </div>
-            <ListaImoveis imoveis={relacionados} objetivo={objetivos[0]} favoritos={favoritos} portalNome={portal.nome} colunas={3} />
-          </section>
-        )}
+        <Suspense fallback={<RelacionadosImovelSkeleton />}>
+          <RelacionadosImovel
+            portal={portal}
+            imovelSlug={imovel.slug}
+            objetivo={objetivos[0]}
+            verMaisHref={linkBusca({ objetivo: objetivos[0], tipo: slugify(imovel.tipo_nome), cidade: slugify(imovel.cidade_nome) })}
+            favoritos={favoritos}
+          />
+        </Suspense>
 
         {links_relacionados.length > 0 && (
           <section className="mt-12" aria-labelledby="links-relacionados">
