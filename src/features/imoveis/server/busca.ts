@@ -27,12 +27,30 @@ export interface DadosBusca {
 }
 
 /** Resultado + catálogos necessários para a UI de filtros. */
-export async function carregarBusca(portal: Portal, filtros: BuscaFiltros, opts: { anuncianteId?: string } = {}): Promise<DadosBusca> {
+export async function carregarBusca(
+  portal: Portal,
+  filtros: BuscaFiltros,
+  opts: { anuncianteId?: string } = {},
+): Promise<DadosBusca> {
   const repo = await getRepository();
-  const [resultado, tipos, cidades] = await Promise.all([buscarImoveis(portal.id, filtros), repo.listTipos(), repo.listCidades(portal.id)]);
-  const cidadePadraoSlug = cidades.find((c) => c.id === portal.cidade_principal_id)?.slug ?? cidades[0]?.slug ?? "";
-  const cidadeSlug = filtros.cidade ?? (portal.exibir_cidade ? undefined : cidadePadraoSlug);
-  const bairros = cidadeSlug ? await repo.listBairros({ cidadeSlug, portalId: portal.id, anuncianteId: opts.anuncianteId, comImoveis: true }) : [];
+  const [resultado, tipos, cidades] = await Promise.all([
+    buscarImoveis(portal.id, filtros),
+    repo.listTipos(),
+    repo.listCidades(portal.id),
+  ]);
+  const cidadePadraoSlug =
+    cidades.find((c) => c.id === portal.cidade_principal_id)?.slug ?? cidades[0]?.slug ?? "";
+  // Bairros sem cidade (links antigos) usam a cidade principal, como a API faz na busca.
+  const cidadeSlug =
+    filtros.cidade ?? (portal.exibir_cidade && !filtros.bairros?.length ? undefined : cidadePadraoSlug);
+  const bairros = cidadeSlug
+    ? await repo.listBairros({
+        cidadeSlug,
+        portalId: portal.id,
+        anuncianteId: opts.anuncianteId,
+        comImoveis: true,
+      })
+    : [];
   return { resultado, tipos, cidades, bairros, cidadePadraoSlug };
 }
 
@@ -45,7 +63,11 @@ function um(v: string | string[] | undefined) {
  * via redirect 301. Converte para slugs e devolve a URL limpa, ou null se não
  * há nada a converter.
  */
-export async function resolverIdsLegado(sp: SearchParamsLike, portalId: string, filtros: BuscaFiltros): Promise<string | null> {
+export async function resolverIdsLegado(
+  sp: SearchParamsLike,
+  portalId: string,
+  filtros: BuscaFiltros,
+): Promise<string | null> {
   const tipoId = um(sp.tipo_id);
   const cidadeId = um(sp.cidade_id);
   const bairroId = um(sp.bairro_id);
@@ -61,7 +83,7 @@ export async function resolverIdsLegado(sp: SearchParamsLike, portalId: string, 
     const bairros = await repo.listBairros({ portalId });
     const bairro = bairros.find((b) => b.id === bairroId);
     if (bairro) {
-      novos.bairro = bairro.slug;
+      novos.bairros = [bairro.slug];
       novos.cidade = cidades.find((c) => c.id === bairro.cidade_id)?.slug ?? novos.cidade;
     }
   }

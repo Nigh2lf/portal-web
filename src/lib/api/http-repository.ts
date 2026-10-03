@@ -360,7 +360,7 @@ export class HttpRepository implements PortalRepository {
     const titulo = tituloBusca(f, {
       tipo: r.applied.property_type?.name,
       cidade: r.applied.city?.name,
-      bairro: r.applied.neighborhood?.name,
+      bairros: (r.applied.neighborhoods ?? (r.applied.neighborhood ? [r.applied.neighborhood] : [])).map((n) => n.name),
       cidadePadrao: portal?.cidade_principal_nome ?? "",
     });
     return {

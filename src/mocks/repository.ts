@@ -1,4 +1,5 @@
 import type { FiltrosMeusImoveis, ImovelDetalhe, PortalRepository } from "@/lib/api/repository";
+import { nomesBairros } from "@/lib/busca/titulo";
 import { RANK_TIPO_ANUNCIO } from "@/lib/tipo-anuncio";
 import type {
   Anunciante,
@@ -142,13 +143,13 @@ export class MockRepository implements PortalRepository {
   private aplicarFiltros(lista: Imovel[], f: BuscaFiltros, ignorarObjetivo = false) {
     const tipo = f.tipo ? TIPOS.find((t) => t.slug === f.tipo) : undefined;
     const cidade = f.cidade ? CIDADES.find((c) => c.slug === f.cidade) : undefined;
-    const bairro = f.bairro ? BAIRROS.find((b) => b.slug === f.bairro && (!cidade || b.cidade_id === cidade.id)) : undefined;
+    const bairroIds = f.bairros?.length ? new Set(BAIRROS.filter((b) => f.bairros!.includes(b.slug) && (!cidade || b.cidade_id === cidade.id)).map((b) => b.id)) : undefined;
     const anunciante = f.anunciante ? ANUNCIANTES.find((a) => a.slug === f.anunciante) : undefined;
     return lista.filter((i) => {
       if (!ignorarObjetivo && !precoPorObjetivo(i, f.objetivo)) return false;
       if (tipo && i.tipo_id !== tipo.id) return false;
       if (cidade && i.cidade_id !== cidade.id) return false;
-      if (bairro && i.bairro_id !== bairro.id) return false;
+      if (bairroIds && !bairroIds.has(i.bairro_id)) return false;
       if (anunciante && i.anunciante_id !== anunciante.id) return false;
       if (f.condominio === "dentro" && !i.dentro_condominio) return false;
       if (f.condominio === "fora" && i.dentro_condominio) return false;
@@ -168,10 +169,10 @@ export class MockRepository implements PortalRepository {
     const obj = OBJETIVOS.find((o) => o.valor === f.objetivo)!;
     const tipo = f.tipo ? TIPOS.find((t) => t.slug === f.tipo)?.nome : undefined;
     const cidade = f.cidade ? CIDADES.find((c) => c.slug === f.cidade) : undefined;
-    const bairro = f.bairro ? BAIRROS.find((b) => b.slug === f.bairro)?.nome : undefined;
+    const bairros = BAIRROS.filter((b) => f.bairros?.includes(b.slug)).map((b) => b.nome);
     const partes = [obj.label, tipo ?? "Imóveis"];
-    if (bairro) partes.push(`em ${bairro}`);
-    partes.push(bairro ? `em ${cidade?.nome ?? portal.cidade_principal_nome}` : `em ${cidade?.nome ?? portal.cidade_principal_nome}`);
+    if (bairros.length) partes.push(`em ${nomesBairros(bairros)}`);
+    partes.push(`em ${cidade?.nome ?? portal.cidade_principal_nome}`);
     return partes.join(" ");
   }
 
@@ -262,7 +263,7 @@ export class MockRepository implements PortalRepository {
       .map(([id]) => {
         const bairro = BAIRROS.find((b) => b.id === id)!;
         const cidade = CIDADES.find((c) => c.id === bairro.cidade_id)!;
-        return { bairro: { ...bairro, total_imoveis: porBairro.get(id)! }, cidade, href: linkBusca({ cidade: cidade.slug, bairro: bairro.slug }) };
+        return { bairro: { ...bairro, total_imoveis: porBairro.get(id)! }, cidade, href: linkBusca({ cidade: cidade.slug, bairros: [bairro.slug] }) };
       });
   }
 
@@ -300,7 +301,7 @@ export class MockRepository implements PortalRepository {
       if (f.ordenacao === "maior_preco") return (precoPorObjetivo(b, f.objetivo) ?? 0) - (precoPorObjetivo(a, f.objetivo) ?? 0);
       return b.atualizado_em.localeCompare(a.atualizado_em);
     });
-    getStore().pesquisas.push({ portal_id: portalId, objetivo: f.objetivo, tipo: f.tipo, cidade: f.cidade, bairro: f.bairro, data: new Date().toISOString() });
+    getStore().pesquisas.push({ portal_id: portalId, objetivo: f.objetivo, tipo: f.tipo, cidade: f.cidade, bairro: f.bairros?.[0], data: new Date().toISOString() });
     const pag = paginar(ordenados, f.pagina, f.por_pagina);
     const titulo = this.tituloBusca(f, portal);
     return {
@@ -329,9 +330,9 @@ export class MockRepository implements PortalRepository {
     const bairro = BAIRROS.find((b) => b.id === imovel.bairro_id)!;
     const tipo = TIPOS.find((t) => t.id === imovel.tipo_id)!;
     const links: PesquisaPopular[] = OBJETIVOS.flatMap((o) => [
-      { label: `${o.label} ${tipo.nome} em ${bairro.nome}`, href: linkBusca({ objetivo: o.valor, tipo: tipo.slug, cidade: cidade.slug, bairro: bairro.slug }), total: 0 },
+      { label: `${o.label} ${tipo.nome} em ${bairro.nome}`, href: linkBusca({ objetivo: o.valor, tipo: tipo.slug, cidade: cidade.slug, bairros: [bairro.slug] }), total: 0 },
       { label: `${o.label} ${tipo.nome} em ${cidade.nome}`, href: linkBusca({ objetivo: o.valor, tipo: tipo.slug, cidade: cidade.slug }), total: 0 },
-    ]).concat([{ label: `Todos os imóveis em ${bairro.nome}`, href: linkBusca({ cidade: cidade.slug, bairro: bairro.slug }), total: 0 }]);
+    ]).concat([{ label: `Todos os imóveis em ${bairro.nome}`, href: linkBusca({ cidade: cidade.slug, bairros: [bairro.slug] }), total: 0 }]);
 
     return { imovel, anunciante: this.resumoAnunciante(a, portal), links_relacionados: links };
   }
@@ -388,7 +389,7 @@ export class MockRepository implements PortalRepository {
       const chave = `${objetivo}|${tipo.id}|${bairro.id}`;
       const atual = grupos.get(chave) ?? {
         label: `${tipo.nome} ${obj.labelTitulo} em ${bairro.nome}, ${cidade.nome} - ${cidade.uf}`,
-        href: linkBusca({ objetivo, tipo: tipo.slug, cidade: cidade.slug, bairro: bairro.slug }),
+        href: linkBusca({ objetivo, tipo: tipo.slug, cidade: cidade.slug, bairros: [bairro.slug] }),
         total: 0,
       };
       atual.total += 1;

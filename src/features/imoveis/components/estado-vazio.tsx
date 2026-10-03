@@ -16,7 +16,7 @@ interface Props {
 /** Nenhum resultado: sugere relaxar filtros ou trocar de objetivo. */
 export function EstadoVazio({ filtros, contadores, sugestoes = [], base = "/imoveis", titulo = "Nenhum imóvel encontrado", descricao }: Props) {
   const alternativas: Array<{ label: string; href: string }> = [];
-  if (filtros.bairro) alternativas.push({ label: "Buscar em toda a cidade", href: linkBusca({ ...filtros, bairro: undefined, pagina: 1 }, base) });
+  if (filtros.bairros?.length) alternativas.push({ label: "Buscar em toda a cidade", href: linkBusca({ ...filtros, bairros: undefined, pagina: 1 }, base) });
   if (filtros.tipo) alternativas.push({ label: "Todos os tipos de imóvel", href: linkBusca({ ...filtros, tipo: undefined, pagina: 1 }, base) });
   if (filtros.valor_min || filtros.valor_max) alternativas.push({ label: "Qualquer faixa de preço", href: linkBusca({ ...filtros, valor_min: undefined, valor_max: undefined, pagina: 1 }, base) });
   if (filtros.quartos?.length || filtros.vagas || filtros.condominio) {

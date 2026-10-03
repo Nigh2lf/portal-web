@@ -388,7 +388,7 @@ export interface BuscaFiltros {
   objetivo: Objetivo;
   tipo?: string; // slug
   cidade?: string; // slug
-  bairro?: string; // slug
+  bairros?: string[]; // slugs (vários bairros, na URL separados por vírgula)
   condominio?: "dentro" | "fora";
   quartos?: number[]; // 1,2,3,4 (4 = 4+)
   vagas?: number;

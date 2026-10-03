@@ -20,6 +20,15 @@ function um(v: string | string[] | undefined) {
   return Array.isArray(v) ? v[0] : v;
 }
 
+/** `?bairro=a,b` ou `?bairro=a&bairro=b`, sem repetidos. */
+function lista(v: string | string[] | undefined) {
+  const partes = (Array.isArray(v) ? v : v ? [v] : [])
+    .flatMap((x) => x.split(","))
+    .map((x) => x.trim())
+    .filter(Boolean);
+  return [...new Set(partes)].slice(0, 20);
+}
+
 function numero(v: string | undefined) {
   if (!v) return undefined;
   const n = Number(v.replace(/\D/g, ""));
@@ -34,11 +43,12 @@ export function parseFiltros(sp: SearchParamsLike, segmentos: Partial<BuscaFiltr
     .map(Number)
     .filter((n) => n >= 1 && n <= 4);
   const condominio = um(sp.condominio);
+  const bairros = lista(sp.bairro);
   return {
     objetivo: OBJETIVOS.some((o) => o.valor === objetivo) ? objetivo : "comprar",
     tipo: um(sp.tipo) || segmentos.tipo,
     cidade: um(sp.cidade) || segmentos.cidade,
-    bairro: um(sp.bairro) || segmentos.bairro,
+    bairros: bairros.length ? bairros : segmentos.bairros,
     condominio: condominio === "dentro" || condominio === "fora" ? condominio : undefined,
     quartos: quartos.length ? quartos : undefined,
     vagas: numero(um(sp.vagas)),
@@ -46,7 +56,9 @@ export function parseFiltros(sp: SearchParamsLike, segmentos: Partial<BuscaFiltr
     valor_max: numero(um(sp.valor_max)),
     codigo: um(sp.codigo)?.trim() || undefined,
     anunciante: um(sp.anunciante) || segmentos.anunciante,
-    ordenacao: (ORDENACOES.some((o) => o.valor === um(sp.ordenacao)) ? um(sp.ordenacao) : "recentes") as Ordenacao,
+    ordenacao: (ORDENACOES.some((o) => o.valor === um(sp.ordenacao))
+      ? um(sp.ordenacao)
+      : "recentes") as Ordenacao,
     pagina: Math.max(1, numero(um(sp.pagina)) ?? 1),
     por_pagina: POR_PAGINA,
   };
@@ -58,7 +70,7 @@ export function filtrosParaQuery(f: Partial<BuscaFiltros>): string {
   if (f.objetivo && f.objetivo !== "comprar") q.set("objetivo", f.objetivo);
   if (f.tipo) q.set("tipo", f.tipo);
   if (f.cidade) q.set("cidade", f.cidade);
-  if (f.bairro) q.set("bairro", f.bairro);
+  if (f.bairros?.length) q.set("bairro", f.bairros.join(","));
   if (f.condominio) q.set("condominio", f.condominio);
   if (f.quartos?.length) q.set("quartos", f.quartos.join(","));
   if (f.vagas) q.set("vagas", String(f.vagas));
@@ -79,9 +91,13 @@ export function linkBusca(f: Partial<BuscaFiltros>, base = "/imoveis") {
 /** Degraus do slider de preço (não linear, como no legado). */
 export function degrausPreco(objetivo: Objetivo, maximo: number) {
   if (objetivo === "comprar") {
-    const base = [0, 100000, 200000, 300000, 400000, 500000, 650000, 800000, 1000000, 1500000, 2000000, 3000000, 5000000, 10000000];
+    const base = [
+      0, 100000, 200000, 300000, 400000, 500000, 650000, 800000, 1000000, 1500000, 2000000, 3000000, 5000000,
+      10000000,
+    ];
     return base.filter((v) => v <= Math.max(maximo, 1000000)).concat(maximo > 10000000 ? [maximo] : []);
   }
-  if (objetivo === "alugar") return [0, 500, 1000, 1500, 2000, 3000, 4000, 5000, 7500, 10000, 15000, 20000, 30000];
+  if (objetivo === "alugar")
+    return [0, 500, 1000, 1500, 2000, 3000, 4000, 5000, 7500, 10000, 15000, 20000, 30000];
   return [0, 200, 400, 600, 800, 1000, 1500, 2000, 3000, 5000, 10000];
 }

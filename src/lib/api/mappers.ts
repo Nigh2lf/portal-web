@@ -262,7 +262,7 @@ export function mapPesquisaPopular(t: ApiTopSearch): PesquisaPopular {
   const obj = OBJETIVOS.find((o) => o.valor === objetivo)!;
   return {
     label: `${t.property_type.name} ${obj.labelTitulo} em ${t.neighborhood.name}, ${t.city.name} - ${t.city.state_code}`,
-    href: linkBusca({ objetivo, tipo: t.property_type.slug, cidade: t.city.slug, bairro: t.neighborhood.slug }),
+    href: linkBusca({ objetivo, tipo: t.property_type.slug, cidade: t.city.slug, bairros: [t.neighborhood.slug] }),
     total: t.total,
   };
 }
@@ -271,7 +271,7 @@ export function mapBairroMaisAnunciado(t: ApiTopNeighborhood, cidadeId: string):
   return {
     bairro: { id: t.neighborhood.id, cidade_id: cidadeId, nome: t.neighborhood.name, slug: t.neighborhood.slug, total_imoveis: t.total },
     cidade: { id: cidadeId, nome: t.city.name, uf: t.city.state_code, slug: t.city.slug },
-    href: linkBusca({ cidade: t.city.slug, bairro: t.neighborhood.slug }),
+    href: linkBusca({ cidade: t.city.slug, bairros: [t.neighborhood.slug] }),
   };
 }
 
@@ -310,7 +310,7 @@ export interface ApiSearchResult {
   total_pages: number;
   counters: { sale: number; rent: number; seasonal: number };
   max_price: string | number;
-  applied: { property_type: ApiRef | null; city: ApiRef | null; neighborhood: ApiRef | null };
+  applied: { property_type: ApiRef | null; city: ApiRef | null; neighborhood: ApiRef | null; neighborhoods?: ApiRef[] };
 }
 export interface ApiAdvertiser {
   id: string;
@@ -443,7 +443,7 @@ export function mapLinkRelacionado(l: ApiRelatedLink): PesquisaPopular {
   const local = l.neighborhood ? l.neighborhood.name : l.city.name;
   return {
     label: `${obj.label} ${l.property_type.name} em ${local}`,
-    href: linkBusca({ objetivo, tipo: l.property_type.slug, cidade: l.city.slug, bairro: l.neighborhood?.slug }),
+    href: linkBusca({ objetivo, tipo: l.property_type.slug, cidade: l.city.slug, bairros: l.neighborhood ? [l.neighborhood.slug] : undefined }),
     total: 0,
   };
 }
@@ -456,7 +456,7 @@ export function filtrosParaApi(f: BuscaFiltros, anuncianteSlug?: string) {
   q.set("purpose", OBJETIVO_TO_PURPOSE[f.objetivo]);
   if (f.tipo) q.set("property_type", f.tipo);
   if (f.cidade) q.set("city", f.cidade);
-  if (f.bairro) q.set("neighborhood", f.bairro);
+  if (f.bairros?.length) q.set("neighborhood", f.bairros.join(","));
   if (f.condominio) q.set("condominium", f.condominio === "dentro" ? "inside" : "outside");
   if (f.quartos?.length) q.set("bedrooms", f.quartos.join(","));
   if (f.vagas) q.set("parking", String(f.vagas));
