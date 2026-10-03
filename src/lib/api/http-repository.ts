@@ -1,33 +1,51 @@
 import type { ImovelDetalhe, PortalRepository } from "./repository";
-import type { Bairro, BuscaFiltros, BuscaResultado, HomeDados, Portal, Publicidade, ResultadoAcao, SessaoUsuario } from "./types";
+import type { Bairro, BuscaFiltros, BuscaResultado, Dica, HomeDados, Paginado, Plano, Portal, Post, Publicidade, ResultadoAcao, SessaoUsuario, TabelaPublicidade } from "./types";
 import { descricaoBusca, tituloBusca } from "@/lib/busca/titulo";
 import { getAccessToken, hashSenha } from "@/lib/auth/session";
 import {
+  CAMPOS_CONTATO,
+  CAMPOS_ENCOMENDA,
+  CAMPOS_LEAD_SITE,
+  contatoParaApi,
+  encomendaParaApi,
   filtrosParaApi,
+  leadSiteParaApi,
   mapAnuncianteResumo,
   mapBairro,
   mapBairroMaisAnunciado,
   mapCidade,
+  mapDica,
   mapImovel,
   mapImovelResumo,
   mapInfra,
   mapLinkRelacionado,
+  mapPaginado,
   mapPesquisaPopular,
+  mapPlano,
   mapPortal,
+  mapPost,
   mapPublicidade,
+  mapTabelaPublicidade,
   mapTipo,
+  traduzirErros,
   type ApiAd,
+  type ApiAdPlacement,
   type ApiAdvertiser,
   type ApiBanner,
   type ApiCity,
   type ApiFeature,
   type ApiNeighborhood,
+  type ApiPaginado,
+  type ApiPlan,
   type ApiPortal,
+  type ApiPostCard,
+  type ApiPostDetail,
   type ApiPropertyCard,
   type ApiPropertyDetail,
   type ApiPropertyType,
   type ApiRelatedLink,
   type ApiSearchResult,
+  type ApiTip,
   type ApiTopNeighborhood,
   type ApiTopSearch,
 } from "./mappers";
@@ -437,15 +455,93 @@ export class HttpRepository implements PortalRepository {
     }
   }
 
+  // ------------------------------------------- planos e tabela de publicidade
+  async listPlanos(): Promise<Plano[]> {
+    const lista = await this.request<ApiPlan[]>("/public/plans/", { revalidate: REVALIDATE_HOME });
+    return lista.map(mapPlano);
+  }
+
+  async getTabelaPublicidade(): Promise<TabelaPublicidade[]> {
+    const lista = await this.request<ApiAdPlacement[]>("/public/ad-placements/", { revalidate: REVALIDATE_HOME });
+    return lista.map(mapTabelaPublicidade);
+  }
+
+  // --------------------------------------------------------- blog e dicas
+  /** Slug do primeiro portal conhecido (conteúdo é global ou do portal; não há portalId no contrato). */
+  private async slugPadrao() {
+    return this.portaisPorSlug.keys().next().value ?? (await this.listPortais())[0]?.slug;
+  }
+
+  async listPosts(pagina: number, porPagina = 9): Promise<Paginado<Post>> {
+    const vazio: Paginado<Post> = { resultados: [], total: 0, pagina, por_pagina: porPagina, total_paginas: 0 };
+    const slug = await this.slugPadrao();
+    if (!slug) return vazio;
+    try {
+      const r = await this.request<ApiPaginado<ApiPostCard>>(`/public/portals/${slug}/posts/?page=${pagina}&page_size=${porPagina}`, { revalidate: REVALIDATE_HOME });
+      return mapPaginado(r, mapPost);
+    } catch (e) {
+      // A paginação da API responde 404 para página fora do intervalo.
+      if (e instanceof ApiError && e.status === 404) return vazio;
+      throw e;
+    }
+  }
+
+  async getPost(slug: string): Promise<Post | null> {
+    const portal = await this.slugPadrao();
+    if (!portal) return null;
+    try {
+      const r = await this.request<ApiPostDetail>(`/public/portals/${portal}/posts/${encodeURIComponent(slug)}/`, { revalidate: REVALIDATE_HOME });
+      return mapPost(r);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }
+  }
+
+  async listDicas(): Promise<Dica[]> {
+    const slug = await this.slugPadrao();
+    if (!slug) return [];
+    const lista = await this.request<ApiTip[]>(`/public/portals/${slug}/tips/`, { revalidate: REVALIDATE_HOME });
+    return lista.map(mapDica);
+  }
+
+  // ------------------------------------------------------ formulários públicos
+  /** POST de formulário público: 403 (remetente bloqueado) vira mensagem genérica; 400 traduz os campos. */
+  private async postarFormulario(path: string, body: unknown, ok: string, bloqueado: string, campos: Record<string, string>): Promise<ResultadoAcao> {
+    try {
+      await this.request(path, { method: "POST", body: JSON.stringify(body) });
+      return { ok: true, mensagem: ok };
+    } catch (e) {
+      if (e instanceof ApiError) {
+        if (e.status === 403) return { ok: false, mensagem: bloqueado };
+        return { ok: false, mensagem: e.message, erros: traduzirErros(e.erros, campos) };
+      }
+      throw e;
+    }
+  }
+
+  enviarContato: PortalRepository["enviarContato"] = async (portalId, p) => {
+    const slug = await this.slugDoPortal(portalId);
+    return this.postarFormulario(`/public/portals/${slug}/contact-messages/`, contatoParaApi(p), "Mensagem enviada. Responderemos em breve.", "Não foi possível enviar sua mensagem.", CAMPOS_CONTATO);
+  };
+
+  enviarEncomenda: PortalRepository["enviarEncomenda"] = async (portalId, p) => {
+    const slug = await this.slugDoPortal(portalId);
+    return this.postarFormulario(
+      `/public/portals/${slug}/property-requests/`,
+      encomendaParaApi(p),
+      p.parceiro ? "Encomenda enviada às imobiliárias parceiras." : "Encomenda registrada. Entraremos em contato.",
+      "Não foi possível enviar sua encomenda.",
+      CAMPOS_ENCOMENDA,
+    );
+  };
+
+  enviarLeadSite: PortalRepository["enviarLeadSite"] = async (portalId, p) => {
+    const slug = await this.slugDoPortal(portalId);
+    return this.postarFormulario(`/public/portals/${slug}/advertiser-leads/`, leadSiteParaApi(p), "Recebemos seu interesse. Nossa equipe vai entrar em contato.", "Não foi possível enviar seu contato.", CAMPOS_LEAD_SITE);
+  };
+
   // ---------------------------------------------- ainda no mock (fase 3)
-  listPlanos = () => this.fallback.listPlanos();
-  getTabelaPublicidade = () => this.fallback.getTabelaPublicidade();
-  listPosts = (p: number, pp?: number) => this.fallback.listPosts(p, pp);
-  getPost = (s: string) => this.fallback.getPost(s);
-  listDicas = () => this.fallback.listDicas();
-  enviarContato: PortalRepository["enviarContato"] = async (portalId, p) => this.fallback.enviarContato(await this.idNoFallback(portalId), p);
-  enviarEncomenda: PortalRepository["enviarEncomenda"] = async (portalId, p) => this.fallback.enviarEncomenda(await this.idNoFallback(portalId), p);
-  enviarLeadSite: PortalRepository["enviarLeadSite"] = async (portalId, p) => this.fallback.enviarLeadSite(await this.idNoFallback(portalId), p);
   alterarSenha: PortalRepository["alterarSenha"] = (a, b, c) => this.fallback.alterarSenha(a, b, c);
   getAnunciante: PortalRepository["getAnunciante"] = (a) => this.fallback.getAnunciante(a);
   atualizarPerfil: PortalRepository["atualizarPerfil"] = (a, p) => this.fallback.atualizarPerfil(a, p);

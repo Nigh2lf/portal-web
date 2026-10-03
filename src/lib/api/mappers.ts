@@ -9,14 +9,22 @@ import type {
   Bairro,
   BuscaFiltros,
   Cidade,
+  ContatoPayload,
+  Dica,
+  EncomendaPayload,
   Imovel,
   ImovelResumo,
   ImovelTipo,
   Infraestrutura,
+  LeadSitePayload,
   Objetivo,
+  Paginado,
   PesquisaPopular,
+  Plano,
   Portal,
+  Post,
   Publicidade,
+  TabelaPublicidade,
   TipoAnunciante,
 } from "./types";
 
@@ -448,4 +456,171 @@ export function filtrosParaApi(f: BuscaFiltros, anuncianteSlug?: string) {
   q.set("page", String(f.pagina));
   q.set("page_size", String(f.por_pagina));
   return q.toString();
+}
+
+// ---------------------------------------------------------------------------
+// Conteúdo (blog, dicas), planos, tabela de publicidade e formulários públicos
+// ---------------------------------------------------------------------------
+
+export interface ApiPaginado<T> {
+  count: number;
+  total_pages: number;
+  page: number;
+  page_size: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+export interface ApiPostCard {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string;
+  author_name: string;
+  cover_image_url: string | null;
+  published_at: string | null;
+}
+export interface ApiPostDetail extends ApiPostCard {
+  body: string;
+  portal: string | null;
+}
+export interface ApiTip {
+  id: string;
+  title: string;
+  body: string;
+  sort_order: number;
+}
+export interface ApiPlan {
+  id: string;
+  slug: string;
+  name: string;
+  monthly_price: string | number | null;
+  property_limit: number;
+  photo_limit: number;
+  featured_limit: number;
+  has_realtor_page: boolean;
+  receives_property_requests: boolean;
+  has_hotsite: boolean;
+  is_recommended: boolean;
+  is_owner_only: boolean;
+  sort_order: number;
+}
+export interface ApiAdPlacement {
+  code: string;
+  name: string;
+  page: "HOME" | "SEARCH" | "PROPERTY";
+  kind: "POPUP" | "HORIZONTAL" | "SIDEBAR";
+  width: number;
+  height: number;
+  monthly_price: string | number | null;
+  notes: string;
+}
+
+const HERO_PADRAO = "/portais/hero-padrao.jpg";
+const PLACEMENT_PAGE_LABEL: Record<ApiAdPlacement["page"], string> = { HOME: "Home", SEARCH: "Lista de imóveis", PROPERTY: "Detalhe do imóvel" };
+const PLACEMENT_KIND_LABEL: Record<ApiAdPlacement["kind"], string> = { POPUP: "Pop-up", HORIZONTAL: "Banner horizontal", SIDEBAR: "Banner lateral" };
+const RECURSO_TO_FUNDING: Record<NonNullable<EncomendaPayload["recurso"]>, string> = { financiamento: "FINANCING", a_vista: "CASH", fgts: "FGTS", permuta: "EXCHANGE" };
+
+export function mapPaginado<T, U>(r: ApiPaginado<T>, map: (item: T) => U): Paginado<U> {
+  return { resultados: r.results.map(map), total: r.count, pagina: r.page, por_pagina: r.page_size, total_paginas: r.total_pages };
+}
+
+export function mapPost(p: ApiPostCard | ApiPostDetail): Post {
+  return {
+    id: p.id,
+    slug: p.slug,
+    titulo: p.title,
+    resumo: p.excerpt,
+    conteudo_html: "body" in p ? p.body : "",
+    autor: p.author_name,
+    imagem_url: p.cover_image_url ?? HERO_PADRAO,
+    publicado_em: p.published_at ?? "",
+  };
+}
+
+export function mapDica(t: ApiTip): Dica {
+  return { id: t.id, titulo: t.title, descricao_html: t.body, ativo: true };
+}
+
+export function mapPlano(p: ApiPlan): Plano {
+  return {
+    id: p.id,
+    slug: p.slug,
+    nome: p.name,
+    preco_mensal: numero(p.monthly_price),
+    imoveis: p.property_limit,
+    fotos: p.photo_limit,
+    destaques: p.featured_limit,
+    pagina_imobiliaria: p.has_realtor_page,
+    encomenda: p.receives_property_requests,
+    hotsite: p.has_hotsite,
+    recomendado: p.is_recommended,
+    exclusivo_proprietario: p.is_owner_only,
+  };
+}
+
+export function mapTabelaPublicidade(a: ApiAdPlacement): TabelaPublicidade {
+  return {
+    codigo: a.code,
+    pagina: PLACEMENT_PAGE_LABEL[a.page] ?? a.page,
+    tipo: PLACEMENT_KIND_LABEL[a.kind] ?? a.kind,
+    tamanho: `${a.width}x${a.height}`,
+    observacao: a.notes ?? "",
+    preco_mensal: Number(a.monthly_price) || 0,
+  };
+}
+
+/** Corpo de `POST .../contact-messages/`. */
+export function contatoParaApi(p: ContatoPayload) {
+  return { name: p.nome, email: p.email, phone: p.telefone, subject: p.assunto, message: p.mensagem, recaptcha_token: p.recaptcha_token };
+}
+
+/** Corpo de `POST .../property-requests/`. */
+export function encomendaParaApi(p: EncomendaPayload) {
+  return {
+    name: p.nome,
+    email: p.email,
+    phone: p.telefone,
+    purpose: OBJETIVO_TO_PURPOSE[p.objetivo],
+    property_type: p.tipo_id || null,
+    city: p.cidade_id || null,
+    neighborhood: p.bairro_id || null,
+    min_price: p.valor_min,
+    max_price: p.valor_max,
+    is_in_condominium: p.dentro_condominio,
+    funding: p.recurso ? RECURSO_TO_FUNDING[p.recurso] : "",
+    message: p.mensagem,
+    is_partner_broadcast: p.parceiro,
+  };
+}
+
+/** Corpo de `POST .../advertiser-leads/`. */
+export function leadSiteParaApi(p: LeadSitePayload) {
+  return { name: p.nome, email: p.email, phone: p.telefone, company: p.imobiliaria, message: p.mensagem ?? "" };
+}
+
+/** Nomes de campo da API → nomes dos formulários (pt-BR), para exibir erros 400 no campo certo. */
+export const CAMPOS_CONTATO: Record<string, string> = { name: "nome", email: "email", phone: "telefone", subject: "assunto", message: "mensagem" };
+export const CAMPOS_ENCOMENDA: Record<string, string> = {
+  name: "nome",
+  email: "email",
+  phone: "telefone",
+  purpose: "objetivo",
+  property_type: "tipo_id",
+  city: "cidade_id",
+  neighborhood: "bairro_id",
+  min_price: "valor_min",
+  max_price: "valor_max",
+  is_in_condominium: "condominio",
+  funding: "recurso",
+  message: "mensagem",
+  is_partner_broadcast: "parceiro",
+};
+export const CAMPOS_LEAD_SITE: Record<string, string> = { name: "nome", email: "email", phone: "telefone", company: "imobiliaria", message: "mensagem" };
+
+export function traduzirErros(erros: Record<string, string[]> | null | undefined, campos: Record<string, string>) {
+  if (!erros) return undefined;
+  const out: Record<string, string[]> = {};
+  for (const [k, v] of Object.entries(erros)) out[campos[k] ?? k] = v;
+  return out;
 }
