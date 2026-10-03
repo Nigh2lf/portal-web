@@ -3,11 +3,11 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   images: {
+    // Fotos de imóveis integrados por XML ficam no servidor de cada anunciante,
+    // então qualquer host https é aceito; S3 e mocks entram no mesmo padrão.
     remotePatterns: [
-      { protocol: "https", hostname: "picsum.photos" },
-      { protocol: "https", hostname: "fastly.picsum.photos" },
-      { protocol: "https", hostname: "*.petropolisimoveis.com" },
-      { protocol: "https", hostname: "*.amazonaws.com" },
+      { protocol: "https", hostname: "**" },
+      { protocol: "http", hostname: "localhost" },
     ],
   },
   experimental: {
