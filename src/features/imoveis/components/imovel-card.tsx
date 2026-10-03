@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Camera, ImageOff, MapPin, Star } from "lucide-react";
+import { Camera, Crown, ImageOff, MapPin, Star } from "lucide-react";
 import type { ImovelResumo, Objetivo } from "@/lib/api/types";
 import { Badge } from "@/components/ui/badge";
 import { FavoritoButton } from "@/features/favoritos/components/favorito-button";
@@ -20,18 +20,21 @@ interface Props {
   prioridade?: boolean;
   /** Na página de favoritos o coração vira um botão "Remover". */
   modoFavoritos?: boolean;
+  /** `grade` (vertical, padrão) ou `lista` (horizontal, um por linha). */
+  layout?: "grade" | "lista";
   className?: string;
 }
 
-export function ImovelCard({ imovel, objetivo, favorito, portalNome, prioridade, modoFavoritos, className }: Props) {
+export function ImovelCard({ imovel, objetivo, favorito, portalNome, prioridade, modoFavoritos, layout = "grade", className }: Props) {
+  const lista = layout === "lista";
   const href = `/imovel/${imovel.slug}`;
   const obj = objetivoExibido(imovel, objetivo);
   const outros = objetivosDisponiveis(imovel).filter((o) => o !== obj);
   const local = `${imovel.bairro_nome}, ${imovel.cidade_nome} - ${imovel.uf}`;
 
   return (
-    <article className={cn("card-elevated card-elevated-hover group relative flex flex-col overflow-hidden", className)}>
-      <div className="relative aspect-[4/3] overflow-hidden bg-muted">
+    <article className={cn("card-elevated card-elevated-hover group relative flex flex-col overflow-hidden", lista && "sm:flex-row", className)}>
+      <div className={cn("relative aspect-[4/3] overflow-hidden bg-muted", lista && "sm:w-72 sm:shrink-0 sm:self-stretch md:w-80 lg:w-96")}>
         <Link href={href} className="absolute inset-0" aria-label={imovel.titulo} tabIndex={-1}>
           {imovel.foto_principal_url ? (
             <Image
@@ -39,7 +42,7 @@ export function ImovelCard({ imovel, objetivo, favorito, portalNome, prioridade,
               alt={imovel.titulo}
               fill
               priority={prioridade}
-              sizes="(min-width: 1280px) 400px, (min-width: 640px) 50vw, 100vw"
+              sizes={lista ? "(min-width: 1024px) 384px, (min-width: 640px) 320px, 100vw" : "(min-width: 1280px) 400px, (min-width: 640px) 50vw, 100vw"}
               className="object-cover transition-transform duration-500 group-hover:scale-105"
             />
           ) : (
@@ -53,12 +56,17 @@ export function ImovelCard({ imovel, objetivo, favorito, portalNome, prioridade,
 
         <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start justify-between gap-2">
           <div className="flex flex-wrap gap-1.5">
-            {imovel.destaque && (
+            {imovel.tipo_anuncio === "superdestaque" ? (
+              <Badge className="pointer-events-auto bg-brand text-brand-foreground shadow-sm">
+                <Crown className="fill-current" aria-hidden />
+                Superdestaque
+              </Badge>
+            ) : imovel.tipo_anuncio === "destaque" ? (
               <Badge className="pointer-events-auto bg-highlight text-foreground shadow-sm">
                 <Star className="fill-current" aria-hidden />
                 Destaque
               </Badge>
-            )}
+            ) : null}
             {outros.map((o) => (
               <Badge key={o} variant="secondary" className="pointer-events-auto bg-white/90 text-foreground shadow-sm">
                 {o === "comprar" ? "Venda" : o === "alugar" ? "Aluguel" : "Temporada"}
@@ -83,7 +91,7 @@ export function ImovelCard({ imovel, objetivo, favorito, portalNome, prioridade,
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col gap-2.5 p-4">
+      <div className={cn("flex flex-1 flex-col gap-2.5 p-4", lista && "sm:p-5")}>
         <div>
           <h3 className="font-heading text-base font-semibold leading-snug">
             <Link href={href} className="line-clamp-2 hover:text-brand focus-visible:outline-none">
@@ -99,7 +107,7 @@ export function ImovelCard({ imovel, objetivo, favorito, portalNome, prioridade,
 
         <CaracteristicasIcones imovel={imovel} />
 
-        {imovel.descricao_resumo && <p className="line-clamp-2 text-sm text-muted-foreground">{imovel.descricao_resumo}</p>}
+        {imovel.descricao_resumo && <p className={cn("line-clamp-2 text-sm text-muted-foreground", lista && "sm:line-clamp-3")}>{imovel.descricao_resumo}</p>}
 
         <div className="mt-auto flex items-center justify-between gap-3 border-t pt-3">
           <Anunciante imovel={imovel} />

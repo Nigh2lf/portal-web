@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { Bairro, Cidade, Imovel, ImovelTipo, Infraestrutura, UsoPlano } from "@/lib/api/types";
+import { TIPOS_ANUNCIO } from "@/lib/tipo-anuncio";
 import { cn } from "@/lib/utils";
 import { atualizarImovelAction, criarImovelAction, listarBairrosPainel } from "../actions";
 import { DESCRICAO_MAX, IMOVEL_VALORES_INICIAIS, imovelParaForm, imovelSchema, type ImovelFormValues } from "../schemas";
@@ -50,8 +51,9 @@ export function ImovelForm({ imovel, tipos, cidades, bairrosIniciais, infraestru
   const ativo = useWatch({ control, name: "ativo" });
 
   // Cota de destaque: ao editar um imóvel já destacado, ele não conta contra si mesmo.
-  const destaquesOcupados = uso.destaques_usados - (imovel?.destaque && imovel.ativo ? 1 : 0);
-  const destaqueBloqueado = !imovel?.destaque && destaquesOcupados >= uso.plano.destaques;
+  const jaDestacado = !!imovel && imovel.tipo_anuncio !== "normal";
+  const destaquesOcupados = uso.destaques_usados - (jaDestacado && imovel.ativo ? 1 : 0);
+  const destaqueBloqueado = !jaDestacado && destaquesOcupados >= uso.plano.destaques;
   const imoveisOcupados = uso.imoveis_usados - (imovel?.ativo ? 1 : 0);
   const ativoBloqueado = !imovel?.ativo && imoveisOcupados >= uso.plano.imoveis;
 
@@ -132,27 +134,39 @@ export function ImovelForm({ imovel, tipos, cidades, bairrosIniciais, infraestru
             />
             <Controller
               control={control}
-              name="destaque"
-              render={({ field }) => (
-                <div className="flex items-start gap-3">
-                  <Switch id="destaque" checked={field.value} onCheckedChange={field.onChange} disabled={(destaqueBloqueado && !field.value) || !ativo} aria-describedby="destaque-dica" />
-                  <div className="grid gap-0.5">
-                    <Label htmlFor="destaque">Imóvel em destaque</Label>
-                    <p id="destaque-dica" className="text-xs text-muted-foreground">
+              name="tipo_anuncio"
+              render={({ field }) => {
+                const semCota = !ativo || destaqueBloqueado;
+                return (
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="tipo_anuncio">Tipo do anúncio</Label>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger id="tipo_anuncio" className="w-full sm:max-w-xs" aria-describedby="tipo-anuncio-dica" aria-invalid={!!erros.tipo_anuncio}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TIPOS_ANUNCIO.map((t) => (
+                          <SelectItem key={t.valor} value={t.valor} disabled={t.valor !== "normal" && semCota}>
+                            {t.rotulo}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p id="tipo-anuncio-dica" className="text-xs text-muted-foreground">
                       {!ativo
                         ? "Só imóveis ativos podem ser destacados."
-                        : destaqueBloqueado && !field.value
+                        : destaqueBloqueado
                           ? `Seu plano permite ${uso.plano.destaques} ${uso.plano.destaques === 1 ? "destaque" : "destaques"}; todos em uso.`
-                          : `Aparece na página inicial. ${Math.max(0, uso.plano.destaques - destaquesOcupados)} de ${uso.plano.destaques} disponíveis.`}
+                          : `Destaque e superdestaque aparecem na página inicial e antes dos demais na busca. ${Math.max(0, uso.plano.destaques - destaquesOcupados)} de ${uso.plano.destaques} disponíveis.`}
                     </p>
-                    {erros.destaque?.message && (
+                    {erros.tipo_anuncio?.message && (
                       <p role="alert" className="text-xs text-destructive">
-                        {erros.destaque.message}
+                        {erros.tipo_anuncio.message}
                       </p>
                     )}
                   </div>
-                </div>
-              )}
+                );
+              }}
             />
             <Controller
               control={control}

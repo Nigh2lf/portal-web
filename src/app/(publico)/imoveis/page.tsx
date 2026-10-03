@@ -7,6 +7,7 @@ import { buscarImoveis, carregarBusca, resolverIdsLegado } from "@/features/imov
 import { getRepository } from "@/lib/api";
 import { linkBusca, parseFiltros } from "@/lib/busca/filtros";
 import { lerFavoritos } from "@/lib/favoritos/cookie";
+import { lerVisao } from "@/features/imoveis/visao";
 import { JsonLd, breadcrumbJsonLd } from "@/lib/seo/json-ld";
 import { montarMetadata } from "@/lib/seo/metadata";
 import { getPortal } from "@/lib/tenant/get-portal";
@@ -27,6 +28,7 @@ export async function generateMetadata({ searchParams }: PageProps<"/imoveis">):
 
 export default async function BuscaPage({ searchParams }: PageProps<"/imoveis">) {
   const [sp, portal, repo, favoritos] = await Promise.all([searchParams, getPortal(), getRepository(), lerFavoritos()]);
+  const visao = await lerVisao();
   const filtros = parseFiltros(sp);
 
   const urlLimpa = await resolverIdsLegado(sp, portal.id, filtros);
@@ -42,7 +44,7 @@ export default async function BuscaPage({ searchParams }: PageProps<"/imoveis">)
       <JsonLd data={breadcrumbJsonLd(portal, [{ nome: "Início", href: "/" }, { nome: "Imóveis", href: "/imoveis" }, { nome: dados.resultado.titulo, href: linkBusca(filtros) }])} />
       <PageHeader titulo={dados.resultado.titulo} subtitulo={`Imóveis anunciados no ${portal.nome}. Filtre por bairro, tipo, quartos e faixa de preço.`} crumbs={crumbs} compacto />
       <Container className="py-6 sm:py-8">
-        <ResultadoBusca portal={portal} filtros={filtros} dados={dados} favoritos={favoritos} banner={banner} sugestoes={sugestoes} />
+        <ResultadoBusca portal={portal} filtros={filtros} dados={dados} favoritos={favoritos} banner={banner} sugestoes={sugestoes} visao={visao} />
       </Container>
     </>
   );

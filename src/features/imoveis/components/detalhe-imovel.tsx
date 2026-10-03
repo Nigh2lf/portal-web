@@ -89,10 +89,10 @@ export function DetalheImovel({ portal, detalhe, favoritos, preview }: Props) {
 
             <header className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
-                {imovel.destaque && (
-                  <Badge className="bg-highlight text-foreground">
+                {imovel.tipo_anuncio !== "normal" && (
+                  <Badge className={imovel.tipo_anuncio === "superdestaque" ? "bg-brand text-brand-foreground" : "bg-highlight text-foreground"}>
                     <Star className="fill-current" aria-hidden />
-                    Destaque
+                    {imovel.tipo_anuncio === "superdestaque" ? "Superdestaque" : "Destaque"}
                   </Badge>
                 )}
                 <Badge variant="secondary">{imovel.tipo_nome}</Badge>

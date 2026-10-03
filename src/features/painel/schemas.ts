@@ -47,7 +47,7 @@ export const imovelSchema = z
       .max(12, "O código tem no máximo 12 caracteres.")
       .regex(/^[A-Za-z0-9._-]+$/, "Use apenas letras, números, ponto, hífen ou sublinhado."),
     ativo: z.boolean(),
-    destaque: z.boolean(),
+    tipo_anuncio: z.enum(["normal", "destaque", "superdestaque"]),
     dentro_condominio: z.boolean(),
     tipo_id: z.string().min(1, "Selecione o tipo do imóvel."),
     cidade_id: z.string().min(1, "Selecione a cidade."),
@@ -80,7 +80,7 @@ export type ImovelFormValues = z.infer<typeof imovelSchema>;
 export const IMOVEL_VALORES_INICIAIS: ImovelFormValues = {
   codigo: "",
   ativo: true,
-  destaque: false,
+  tipo_anuncio: "normal",
   dentro_condominio: false,
   tipo_id: "",
   cidade_id: "",
@@ -129,7 +129,7 @@ export function imovelParaForm(i: Imovel, infraestruturas?: Infraestrutura[]): I
   return {
     codigo: i.codigo,
     ativo: i.ativo,
-    destaque: i.destaque,
+    tipo_anuncio: i.tipo_anuncio,
     dentro_condominio: i.dentro_condominio,
     tipo_id: i.tipo_id,
     cidade_id: i.cidade_id,
@@ -162,7 +162,7 @@ export function formParaPayload(v: ImovelFormValues): ImovelPayload {
   return {
     codigo: v.codigo.trim(),
     ativo: v.ativo,
-    destaque: v.destaque,
+    tipo_anuncio: v.tipo_anuncio,
     tipo_id: v.tipo_id,
     cidade_id: v.cidade_id,
     bairro_id: v.bairro_id,
@@ -188,7 +188,7 @@ export function payloadDeImovel(i: Imovel): ImovelPayload {
   return {
     codigo: i.codigo,
     ativo: i.ativo,
-    destaque: i.destaque,
+    tipo_anuncio: i.tipo_anuncio,
     tipo_id: i.tipo_id,
     cidade_id: i.cidade_id,
     bairro_id: i.bairro_id,

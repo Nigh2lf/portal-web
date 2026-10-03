@@ -114,7 +114,7 @@ export async function alternarAtivoAction(imovelId: string): Promise<ResultadoAc
   const payload = payloadDeImovel(atual);
   payload.ativo = !atual.ativo;
   // Imóvel inativo não ocupa cota de destaque.
-  if (!payload.ativo) payload.destaque = false;
+  if (!payload.ativo) payload.tipo_anuncio = "normal";
   const r = await repo.atualizarImovel(sessao.anunciante_id, imovelId, payload);
   if (!r.ok) {
     const motivo = r.erros ? Object.values(r.erros).flat().join(" ") : r.mensagem;

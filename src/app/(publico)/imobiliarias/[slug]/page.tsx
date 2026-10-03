@@ -10,6 +10,7 @@ import { carregarBusca } from "@/features/imoveis/server/busca";
 import { getRepository } from "@/lib/api";
 import { OBJETIVOS, linkBusca, parseFiltros } from "@/lib/busca/filtros";
 import { lerFavoritos } from "@/lib/favoritos/cookie";
+import { lerVisao } from "@/features/imoveis/visao";
 import { JsonLd, breadcrumbJsonLd } from "@/lib/seo/json-ld";
 import { montarMetadata } from "@/lib/seo/metadata";
 import { getPortal } from "@/lib/tenant/get-portal";
@@ -37,6 +38,7 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 
 export default async function HotsitePage(props: Props) {
   const [{ slug, sp, portal, repo, anunciante }, favoritos] = await Promise.all([resolver(props), lerFavoritos()]);
+  const visao = await lerVisao();
   if (!anunciante) notFound();
 
   const base = `/imobiliarias/${slug}`;
@@ -107,7 +109,7 @@ export default async function HotsitePage(props: Props) {
 
       <Container className="py-6 sm:py-8">
         <h2 className="mb-5 text-2xl font-bold text-brand">Imóveis de {anunciante.nome}</h2>
-        <ResultadoBusca portal={portal} filtros={filtrosUI} dados={dados} favoritos={favoritos} banner={banner} base={base} anuncianteId={anunciante.id} />
+        <ResultadoBusca portal={portal} filtros={filtrosUI} dados={dados} favoritos={favoritos} banner={banner} base={base} anuncianteId={anunciante.id} visao={visao} />
       </Container>
     </>
   );

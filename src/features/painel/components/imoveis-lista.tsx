@@ -67,7 +67,7 @@ export function ImoveisLista({ imoveis }: { imoveis: Imovel[] }) {
                 <TableCell>
                   <div className="flex flex-wrap gap-1">
                     <StatusBadge imovel={i} />
-                    {i.destaque && <DestaqueBadge />}
+                    {i.tipo_anuncio !== "normal" && <DestaqueBadge tipo={i.tipo_anuncio} />}
                   </div>
                 </TableCell>
                 <TableCell className="text-right tabular-nums">{formatarNumero(i.visualizacoes)}</TableCell>
@@ -105,7 +105,7 @@ export function ImoveisLista({ imoveis }: { imoveis: Imovel[] }) {
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                 <StatusBadge imovel={i} />
-                {i.destaque && <DestaqueBadge />}
+                {i.tipo_anuncio !== "normal" && <DestaqueBadge tipo={i.tipo_anuncio} />}
                 <span className="ml-auto inline-flex items-center gap-1 tabular-nums">
                   <Eye className="size-3.5" aria-hidden /> {formatarNumero(i.visualizacoes)}
                 </span>

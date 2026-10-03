@@ -4,6 +4,7 @@
  */
 
 import { OBJETIVOS, linkBusca } from "@/lib/busca/filtros";
+import { tipoAnuncioDaApi, tipoAnuncioParaApi, type TipoAnuncioApi } from "@/lib/tipo-anuncio";
 import type { FiltrosMeusImoveis } from "./repository";
 import type {
   Anunciante,
@@ -103,7 +104,7 @@ export interface ApiPropertyCard {
   reference_code: string;
   slug: string;
   title: string;
-  is_featured: boolean;
+  ad_type: TipoAnuncioApi;
   property_type_name: string;
   property_type_slug: string;
   city_name: string;
@@ -231,7 +232,7 @@ export function mapImovelResumo(c: ApiPropertyCard): ImovelResumo {
     slug: c.slug,
     titulo: c.title,
     anunciante_id: "",
-    destaque: c.is_featured,
+    tipo_anuncio: tipoAnuncioDaApi(c.ad_type),
     tipo_nome: c.property_type_name,
     cidade_nome: c.city_name,
     bairro_nome: c.neighborhood_name ?? "",
@@ -336,7 +337,7 @@ export interface ApiPropertyDetail {
   reference_code: string;
   slug: string;
   title: string;
-  is_featured: boolean;
+  ad_type: TipoAnuncioApi;
   property_type: { id: string; name: string; slug: string };
   city: { id: string; name: string; slug: string; state_code: string };
   neighborhood: { id: string; name: string; slug: string } | null;
@@ -405,7 +406,7 @@ export function mapImovel(p: ApiPropertyDetail, portalId: string): Imovel {
     anunciante_id: p.advertiser.id,
     portal_id: portalId,
     ativo: true,
-    destaque: p.is_featured,
+    tipo_anuncio: tipoAnuncioDaApi(p.ad_type),
     status: "publicado",
     tipo_id: p.property_type.id,
     tipo_nome: p.property_type.name,
@@ -695,7 +696,7 @@ export interface ApiPropertyPainel {
   title: string;
   status: "DRAFT" | "PUBLISHED";
   is_active: boolean;
-  is_featured: boolean;
+  ad_type: TipoAnuncioApi;
   property_type: { id: string; name: string; slug: string };
   city: { id: string; name: string; slug: string; state_code: string };
   neighborhood: { id: string; name: string; slug: string } | null;
@@ -830,7 +831,7 @@ export function mapImovelPainel(p: ApiPropertyPainel, anuncianteId = ""): Imovel
     anunciante_id: anuncianteId,
     portal_id: "",
     ativo: p.is_active,
-    destaque: p.is_featured,
+    tipo_anuncio: tipoAnuncioDaApi(p.ad_type),
     status: p.status === "DRAFT" ? "rascunho" : "publicado",
     tipo_id: p.property_type.id,
     tipo_nome: p.property_type.name,
@@ -1007,7 +1008,7 @@ export function imovelParaApi(p: ImovelPayload, catalogo: Infraestrutura[]) {
   return {
     reference_code: p.codigo,
     is_active: p.ativo,
-    is_featured: p.destaque,
+    ad_type: tipoAnuncioParaApi(p.tipo_anuncio),
     property_type: p.tipo_id,
     city: p.cidade_id,
     neighborhood: p.bairro_id || null,
@@ -1052,7 +1053,7 @@ export const CAMPOS_PERFIL: Record<string, string> = {
 export const CAMPOS_IMOVEL: Record<string, string> = {
   reference_code: "codigo",
   is_active: "ativo",
-  is_featured: "destaque",
+  ad_type: "tipo_anuncio",
   property_type: "tipo_id",
   city: "cidade_id",
   neighborhood: "bairro_id",

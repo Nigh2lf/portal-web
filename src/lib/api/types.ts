@@ -94,6 +94,9 @@ export interface ImovelTaxa {
   observacao: string | null;
 }
 
+/** Tipo do anúncio (API: NORMAL | FEATURED | SUPER_FEATURED). Destaque e superdestaque contam na cota do plano. */
+export type TipoAnuncio = "normal" | "destaque" | "superdestaque";
+
 export interface Imovel {
   id: string;
   codigo: string;
@@ -102,7 +105,7 @@ export interface Imovel {
   anunciante_id: string;
   portal_id: string;
   ativo: boolean;
-  destaque: boolean;
+  tipo_anuncio: TipoAnuncio;
   status: "rascunho" | "publicado";
   tipo_id: string;
   tipo_nome: string;
@@ -141,7 +144,7 @@ export interface ImovelResumo
     | "slug"
     | "titulo"
     | "anunciante_id"
-    | "destaque"
+    | "tipo_anuncio"
     | "tipo_nome"
     | "cidade_nome"
     | "bairro_nome"
@@ -457,7 +460,7 @@ export type PerfilPayload = Pick<
 export interface ImovelPayload {
   codigo: string;
   ativo: boolean;
-  destaque: boolean;
+  tipo_anuncio: TipoAnuncio;
   tipo_id: string;
   cidade_id: string;
   bairro_id: string;

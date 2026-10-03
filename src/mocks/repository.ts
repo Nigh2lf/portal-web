@@ -1,4 +1,5 @@
 import type { FiltrosMeusImoveis, ImovelDetalhe, PortalRepository } from "@/lib/api/repository";
+import { RANK_TIPO_ANUNCIO } from "@/lib/tipo-anuncio";
 import type {
   Anunciante,
   AnuncianteResumo,
@@ -86,7 +87,7 @@ export class MockRepository implements PortalRepository {
       slug: i.slug,
       titulo: i.titulo,
       anunciante_id: i.anunciante_id,
-      destaque: i.destaque,
+      tipo_anuncio: i.tipo_anuncio,
       tipo_nome: i.tipo_nome,
       cidade_nome: i.cidade_nome,
       bairro_nome: i.bairro_nome,
@@ -225,7 +226,7 @@ export class MockRepository implements PortalRepository {
     const portal = this.portal(portalId);
     const publicados = this.publicadosDoPortal(portal);
     const rnd = criarRandom(Number(portal.id.slice(-4)) || 1);
-    const destaques = rnd.shuffle(publicados.filter((i) => i.destaque && i.fotos.length)).slice(0, 12).map((i) => this.resumo(i));
+    const destaques = rnd.shuffle(publicados.filter((i) => i.tipo_anuncio !== "normal" && i.fotos.length)).slice(0, 12).map((i) => this.resumo(i));
     const porBairro = new Map<string, number>();
     for (const i of publicados) porBairro.set(i.bairro_id, (porBairro.get(i.bairro_id) ?? 0) + 1);
     const bairros = [...porBairro.entries()]
@@ -259,7 +260,7 @@ export class MockRepository implements PortalRepository {
     const filtrados = this.aplicarFiltros(base, f);
     const valorMaximo = Math.max(0, ...base.map((i) => precoPorObjetivo(i, f.objetivo) ?? 0));
     const ordenados = [...filtrados].sort((a, b) => {
-      if (a.destaque !== b.destaque) return a.destaque ? -1 : 1;
+      if (RANK_TIPO_ANUNCIO[a.tipo_anuncio] !== RANK_TIPO_ANUNCIO[b.tipo_anuncio]) return RANK_TIPO_ANUNCIO[b.tipo_anuncio] - RANK_TIPO_ANUNCIO[a.tipo_anuncio];
       const fa = a.fotos.length > 0 ? 1 : 0;
       const fb = b.fotos.length > 0 ? 1 : 0;
       if (fa !== fb) return fb - fa;
@@ -529,7 +530,7 @@ export class MockRepository implements PortalRepository {
     const a = this.anunciante(anuncianteId);
     const plano = PLANOS.find((p) => p.id === a?.plano_id) ?? PLANOS[0]!;
     const meus = getStore().imoveis.filter((i) => i.anunciante_id === anuncianteId);
-    return { plano, imoveis_usados: meus.filter((i) => i.ativo).length, destaques_usados: meus.filter((i) => i.ativo && i.destaque).length };
+    return { plano, imoveis_usados: meus.filter((i) => i.ativo).length, destaques_usados: meus.filter((i) => i.ativo && i.tipo_anuncio !== "normal").length };
   }
 
   async listMeusImoveis(anuncianteId: string, f: FiltrosMeusImoveis): Promise<Paginado<Imovel>> {
@@ -572,7 +573,7 @@ export class MockRepository implements PortalRepository {
     const plano = PLANOS.find((p) => p.id === anunciante.plano_id)!;
     const meus = s.imoveis.filter((i) => i.anunciante_id === anunciante.id && i.id !== base?.id);
     if (payload.ativo && meus.filter((i) => i.ativo).length >= plano.imoveis) erros.ativo = [`Seu plano permite ${plano.imoveis} imóveis ativos.`];
-    if (payload.destaque && meus.filter((i) => i.ativo && i.destaque).length >= plano.destaques) erros.destaque = [`Seu plano permite ${plano.destaques} destaques.`];
+    if (payload.tipo_anuncio !== "normal" && meus.filter((i) => i.ativo && i.tipo_anuncio !== "normal").length >= plano.destaques) erros.tipo_anuncio = [`Seu plano permite ${plano.destaques} destaques.`];
     if (Object.keys(erros).length) return { ok: false, erros, mensagem: "Verifique os campos destacados." };
 
     const objetivoTitulo = payload.preco_venda ? "à venda" : payload.preco_locacao ? "para alugar" : "para temporada";

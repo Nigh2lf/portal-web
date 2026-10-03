@@ -1,4 +1,4 @@
-import type { Imovel, ImovelFoto, ImovelTaxa } from "@/lib/api/types";
+import type { Imovel, ImovelFoto, ImovelTaxa, TipoAnuncio } from "@/lib/api/types";
 import { slugify } from "@/lib/utils/format";
 import { criarRandom, dataAtras, fotoUrl, uuidFake } from "../random";
 import { ANUNCIANTES } from "./anunciantes";
@@ -119,7 +119,7 @@ export function gerarImoveis(): Imovel[] {
       const p = precos(tipo.nome, areaConstruida ?? areaTotal ?? 100, cidadeId);
       if (!p.preco_venda && !p.preco_locacao && !p.preco_temporada) p.preco_venda = 250000;
       const dentroCondominio = rnd.chance(residencial ? 0.45 : 0.15);
-      const destaque = destaquesRestantes > 0 && rnd.chance(0.35) ? (destaquesRestantes--, true) : false;
+      const tipo_anuncio: TipoAnuncio = destaquesRestantes > 0 && rnd.chance(0.35) ? (destaquesRestantes--, rnd.chance(0.2) ? "superdestaque" : "destaque") : "normal";
       const taxas: ImovelTaxa[] = [];
       if (rnd.chance(0.7)) taxas.push({ descricao: "IPTU", valor: arred((p.preco_venda ?? 300000) * 0.0008, 10), observacao: "anual" });
       if (dentroCondominio) taxas.push({ descricao: "Condomínio", valor: arred(rnd.int(250, 1800), 10), observacao: "mensal" });
@@ -137,7 +137,7 @@ export function gerarImoveis(): Imovel[] {
         anunciante_id: anunciante.id,
         portal_id: portal.id,
         ativo: rnd.chance(0.95),
-        destaque,
+        tipo_anuncio,
         status: rnd.chance(0.94) ? "publicado" : "rascunho",
         tipo_id: tipo.id,
         tipo_nome: tipo.nome,

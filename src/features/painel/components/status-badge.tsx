@@ -1,6 +1,6 @@
-import { CircleCheck, CircleDashed, CirclePause, Star } from "lucide-react";
+import { CircleCheck, CircleDashed, CirclePause, Crown, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import type { Imovel } from "@/lib/api/types";
+import type { Imovel, TipoAnuncio } from "@/lib/api/types";
 import { statusDoImovel } from "../utils";
 
 export function StatusBadge({ imovel }: { imovel: Pick<Imovel, "ativo" | "status"> }) {
@@ -24,7 +24,14 @@ export function StatusBadge({ imovel }: { imovel: Pick<Imovel, "ativo" | "status
   );
 }
 
-export function DestaqueBadge() {
+export function DestaqueBadge({ tipo = "destaque" }: { tipo?: TipoAnuncio }) {
+  if (tipo === "superdestaque") {
+    return (
+      <Badge className="bg-brand text-brand-foreground">
+        <Crown aria-hidden className="fill-current" /> Superdestaque
+      </Badge>
+    );
+  }
   return (
     <Badge className="bg-highlight/20 text-foreground border-highlight/40">
       <Star aria-hidden className="fill-current" /> Destaque
