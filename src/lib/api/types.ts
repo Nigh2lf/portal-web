@@ -363,6 +363,8 @@ export interface SessaoUsuario {
   tipo: TipoAnunciante;
   plano_id: string;
   carga_automatica: boolean;
+  /** Presente só no modo API: JWT para gravar em cookies httpOnly. */
+  tokens?: { access: string; refresh: string };
 }
 
 // ---------------------------------------------------------------------------

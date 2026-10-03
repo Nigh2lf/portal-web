@@ -481,6 +481,19 @@ export class MockRepository implements PortalRepository {
     return { ok: true, mensagem: `Se ${email} estiver cadastrado, enviamos um link para redefinir a senha.` };
   }
 
+  async redefinirSenha(email: string, _hash: string, novaSenha: string): Promise<ResultadoAcao> {
+    const u = getStore().usuarios.find((x) => x.email.toLowerCase() === email.toLowerCase());
+    if (!u) return { ok: false, mensagem: "Link inválido ou expirado." };
+    u.senha = novaSenha;
+    return { ok: true, mensagem: "Senha redefinida. Faça login com a nova senha." };
+  }
+
+  async getSessaoAtual(_accessToken: string | null, anuncianteId: string | null) {
+    return anuncianteId ? this.getSessaoPorAnunciante(anuncianteId) : null;
+  }
+
+  async encerrarSessao() {}
+
   async alterarSenha(anuncianteId: string, atual: string, nova: string): Promise<ResultadoAcao> {
     const u = getStore().usuarios.find((x) => x.anunciante_id === anuncianteId);
     if (!u) return { ok: false, mensagem: "Usuário não encontrado." };

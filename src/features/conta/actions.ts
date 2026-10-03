@@ -7,7 +7,7 @@ import { iniciarSessao } from "@/lib/auth/session";
 import { getPortal } from "@/lib/tenant/get-portal";
 import { errosDoZod } from "@/features/contato/lib/form";
 import { somenteDigitos } from "@/features/contato/lib/mascaras";
-import { cadastroSchema, loginSchema, recuperarSenhaSchema, type CadastroForm } from "./schemas";
+import { cadastroSchema, loginSchema, recuperarSenhaSchema, redefinirSenhaSchema, type CadastroForm, type RedefinirSenhaForm } from "./schemas";
 
 /** Só aceita caminhos internos como destino pós-login (evita open redirect). */
 function destinoSeguro(next: string | undefined) {
@@ -78,4 +78,12 @@ export async function recuperarSenha(dados: { email: string }): Promise<Resultad
   if (!parsed.success) return { ok: false, erros: errosDoZod(parsed.error) };
   const repo = await getRepository();
   return repo.recuperarSenha(parsed.data.email);
+}
+
+/** Página do link enviado por e-mail: grava a nova senha a partir de `email` + `hash`. */
+export async function redefinirSenha(dados: RedefinirSenhaForm): Promise<ResultadoAcao> {
+  const parsed = redefinirSenhaSchema.safeParse(dados);
+  if (!parsed.success) return { ok: false, erros: errosDoZod(parsed.error) };
+  const repo = await getRepository();
+  return repo.redefinirSenha(parsed.data.email.toLowerCase(), parsed.data.hash, parsed.data.senha);
 }

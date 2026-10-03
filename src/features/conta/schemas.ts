@@ -135,3 +135,14 @@ export const cadastroValoresIniciais: CadastroForm = {
   cupom: "",
   aceite_termos: false,
 };
+
+export const redefinirSenhaSchema = z
+  .object({
+    email: z.email("Informe um e-mail válido"),
+    hash: z.string().min(1, "Link inválido"),
+    senha: z.string().min(6, "A senha precisa ter pelo menos 6 caracteres"),
+    confirmar: z.string(),
+  })
+  .refine((v) => v.senha === v.confirmar, { path: ["confirmar"], message: "As senhas não conferem" });
+
+export type RedefinirSenhaForm = z.infer<typeof redefinirSenhaSchema>;

@@ -1,6 +1,7 @@
 import type { ImovelDetalhe, PortalRepository } from "./repository";
-import type { Bairro, BuscaFiltros, BuscaResultado, HomeDados, Portal, Publicidade } from "./types";
+import type { Bairro, BuscaFiltros, BuscaResultado, HomeDados, Portal, Publicidade, ResultadoAcao, SessaoUsuario } from "./types";
 import { descricaoBusca, tituloBusca } from "@/lib/busca/titulo";
+import { getAccessToken, hashSenha } from "@/lib/auth/session";
 import {
   filtrosParaApi,
   mapAnuncianteResumo,
@@ -326,6 +327,116 @@ export class HttpRepository implements PortalRepository {
     }
   };
 
+  // ---------------------------------------------------------------- sessão
+  /** Chamada autenticada da área do anunciante com o access token dos cookies. */
+  protected async requestAuth<T>(path: string, init: RequestInit & { revalidate?: number } = {}): Promise<T> {
+    const token = await getAccessToken();
+    if (!token) throw new ApiError(401, "Sessão expirada.");
+    return this.request<T>(path, { ...init, token });
+  }
+
+  private sessaoDe(me: ApiMe, tokens?: { access: string; refresh: string }): SessaoUsuario {
+    return {
+      anunciante_id: me.advertiser_id,
+      nome: me.name,
+      email: me.email,
+      tipo: me.type === "OWNER" ? "proprietario" : me.type === "BROKER" ? "corretor" : "imobiliaria",
+      plano_id: me.plan?.id ?? "",
+      carga_automatica: Boolean(me.has_automatic_import),
+      tokens,
+    };
+  }
+
+  async login(email: string, senha: string): Promise<ResultadoAcao<SessaoUsuario>> {
+    try {
+      const tokens = await this.request<{ access: string; refresh: string }>("/auth/login/", {
+        method: "POST",
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password: hashSenha(senha) }),
+      });
+      const me = await this.request<ApiMe>("/advertiser/me/", { token: tokens.access });
+      return { ok: true, dados: this.sessaoDe(me, tokens) };
+    } catch (e) {
+      if (e instanceof ApiError) {
+        if (e.status === 401) return { ok: false, mensagem: "E-mail ou senha inválidos." };
+        if (e.status === 403 || e.status === 404) return { ok: false, mensagem: "Esta conta não é de anunciante." };
+        return { ok: false, mensagem: e.message };
+      }
+      throw e;
+    }
+  }
+
+  async getSessaoAtual(accessToken: string | null): Promise<SessaoUsuario | null> {
+    if (!accessToken) return null;
+    try {
+      const me = await this.request<ApiMe>("/advertiser/me/", { token: accessToken });
+      return this.sessaoDe(me);
+    } catch {
+      return null;
+    }
+  }
+
+  async encerrarSessao(refreshToken: string | null) {
+    if (!refreshToken) return;
+    await this.request("/auth/logout/", { method: "POST", body: JSON.stringify({ refresh: refreshToken }) }).catch(() => undefined);
+  }
+
+  async getSessaoPorAnunciante(): Promise<SessaoUsuario | null> {
+    return this.getSessaoAtual(await getAccessToken());
+  }
+
+  async recuperarSenha(email: string): Promise<ResultadoAcao> {
+    await this.request("/users/forgot-password/", { method: "POST", body: JSON.stringify({ email: email.trim().toLowerCase() }) }).catch(() => undefined);
+    return { ok: true, mensagem: `Se ${email} estiver cadastrado, enviamos um link para redefinir a senha. O link vale por 1 hora.` };
+  }
+
+  async redefinirSenha(email: string, hash: string, novaSenha: string): Promise<ResultadoAcao> {
+    try {
+      await this.request("/users/change-password-forgot-password/", {
+        method: "POST",
+        body: JSON.stringify({ email, forgot_password_hash: hash, new_password: hashSenha(novaSenha) }),
+      });
+      return { ok: true, mensagem: "Senha redefinida. Faça login com a nova senha." };
+    } catch (e) {
+      if (e instanceof ApiError) return { ok: false, mensagem: e.erros?.detail?.join(" ") ?? e.message, erros: e.erros ?? undefined };
+      throw e;
+    }
+  }
+
+  async cadastrar(portalId: string, p: Parameters<PortalRepository["cadastrar"]>[1]): Promise<ResultadoAcao<SessaoUsuario>> {
+    const slug = await this.slugDoPortal(portalId);
+    const tipo = p.tipo === "proprietario" ? "OWNER" : p.tipo === "corretor" ? "BROKER" : "AGENCY";
+    try {
+      const r = await this.request<{ advertiser_id: string; user_id: string; is_published: boolean; access: string; refresh: string }>(`/public/portals/${slug}/register/`, {
+        method: "POST",
+        body: JSON.stringify({
+          type: tipo,
+          plan: p.plano_id,
+          name: p.nome,
+          document: p.documento,
+          email: p.email,
+          password: hashSenha(p.senha),
+          phone: p.telefone,
+          phone_secondary: p.telefone2 ?? "",
+          contact_name: p.contato ?? "",
+          website: p.site ?? "",
+          address: p.endereco ?? "",
+          creci: p.creci ?? "",
+          coupon: p.cupom ?? "",
+          accepted_terms: p.aceite_termos,
+        }),
+      });
+      const me = await this.request<ApiMe>("/advertiser/me/", { token: r.access });
+      return {
+        ok: true,
+        dados: this.sessaoDe(me, { access: r.access, refresh: r.refresh }),
+        mensagem: r.is_published ? "Cadastro realizado com sucesso." : "Cadastro recebido. Seu plano será ativado após confirmação.",
+      };
+    } catch (e) {
+      if (e instanceof ApiError) return { ok: false, mensagem: e.message, erros: traduzirErrosCadastro(e.erros) };
+      throw e;
+    }
+  }
+
   // ---------------------------------------------- ainda no mock (fase 3)
   listPlanos = () => this.fallback.listPlanos();
   getTabelaPublicidade = () => this.fallback.getTabelaPublicidade();
@@ -335,11 +446,7 @@ export class HttpRepository implements PortalRepository {
   enviarContato: PortalRepository["enviarContato"] = async (portalId, p) => this.fallback.enviarContato(await this.idNoFallback(portalId), p);
   enviarEncomenda: PortalRepository["enviarEncomenda"] = async (portalId, p) => this.fallback.enviarEncomenda(await this.idNoFallback(portalId), p);
   enviarLeadSite: PortalRepository["enviarLeadSite"] = async (portalId, p) => this.fallback.enviarLeadSite(await this.idNoFallback(portalId), p);
-  login: PortalRepository["login"] = (e, s) => this.fallback.login(e, s);
-  cadastrar: PortalRepository["cadastrar"] = async (portalId, p) => this.fallback.cadastrar(await this.idNoFallback(portalId), p);
-  recuperarSenha: PortalRepository["recuperarSenha"] = (e) => this.fallback.recuperarSenha(e);
   alterarSenha: PortalRepository["alterarSenha"] = (a, b, c) => this.fallback.alterarSenha(a, b, c);
-  getSessaoPorAnunciante: PortalRepository["getSessaoPorAnunciante"] = (a) => this.fallback.getSessaoPorAnunciante(a);
   getAnunciante: PortalRepository["getAnunciante"] = (a) => this.fallback.getAnunciante(a);
   atualizarPerfil: PortalRepository["atualizarPerfil"] = (a, p) => this.fallback.atualizarPerfil(a, p);
   getUsoPlano: PortalRepository["getUsoPlano"] = (a) => this.fallback.getUsoPlano(a);
@@ -358,4 +465,62 @@ export class HttpRepository implements PortalRepository {
   getEstatisticasMensais: PortalRepository["getEstatisticasMensais"] = (a, m) => this.fallback.getEstatisticasMensais(a, m);
   getEstatisticasPeriodo: PortalRepository["getEstatisticasPeriodo"] = (a, i, f) => this.fallback.getEstatisticasPeriodo(a, i, f);
   getRelatorioImportacao: PortalRepository["getRelatorioImportacao"] = (a) => this.fallback.getRelatorioImportacao(a);
+}
+
+/** Contrato de `GET /advertiser/me/` (área do anunciante). */
+export interface ApiMe {
+  advertiser_id: string;
+  user_id: string;
+  name: string;
+  email: string;
+  type: "OWNER" | "BROKER" | "AGENCY";
+  portal_slug: string;
+  plan: {
+    id: string;
+    slug: string;
+    name: string;
+    property_limit: number;
+    photo_limit: number;
+    featured_limit: number;
+    has_hotsite: boolean;
+    has_realtor_page: boolean;
+    receives_property_requests: boolean;
+    monthly_price: string | number | null;
+  } | null;
+  has_automatic_import: boolean;
+  has_hotsite: boolean;
+  is_published: boolean;
+  document: string;
+  phone: string;
+  phone_secondary: string;
+  whatsapp: string;
+  contact_name: string;
+  website: string;
+  address: string;
+  creci: string;
+  created_at: string;
+}
+
+const CAMPOS_CADASTRO: Record<string, string> = {
+  type: "tipo",
+  plan: "plano_id",
+  name: "nome",
+  document: "documento",
+  email: "email",
+  password: "senha",
+  phone: "telefone",
+  phone_secondary: "telefone2",
+  contact_name: "contato",
+  website: "site",
+  address: "endereco",
+  creci: "creci",
+  coupon: "cupom",
+  accepted_terms: "aceite_termos",
+};
+
+function traduzirErrosCadastro(erros: Record<string, string[]> | null) {
+  if (!erros) return undefined;
+  const out: Record<string, string[]> = {};
+  for (const [k, v] of Object.entries(erros)) out[CAMPOS_CADASTRO[k] ?? k] = v;
+  return out;
 }

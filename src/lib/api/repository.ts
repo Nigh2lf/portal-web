@@ -97,8 +97,13 @@ export interface PortalRepository {
   login(email: string, senha: string): Promise<ResultadoAcao<SessaoUsuario>>;
   cadastrar(portalId: string, payload: CadastroPayload): Promise<ResultadoAcao<SessaoUsuario>>;
   recuperarSenha(email: string): Promise<ResultadoAcao>;
+  redefinirSenha(email: string, hash: string, novaSenha: string): Promise<ResultadoAcao>;
   alterarSenha(anuncianteId: string, atual: string, nova: string): Promise<ResultadoAcao>;
   getSessaoPorAnunciante(anuncianteId: string): Promise<SessaoUsuario | null>;
+  /** Modo API: sessão a partir do access token; modo mock delega a `getSessaoPorAnunciante`. */
+  getSessaoAtual(accessToken: string | null, anuncianteId: string | null): Promise<SessaoUsuario | null>;
+  /** Modo API: invalida o refresh token no backend. */
+  encerrarSessao(refreshToken: string | null): Promise<void>;
 
   // Painel
   getAnunciante(anuncianteId: string): Promise<Anunciante | null>;
