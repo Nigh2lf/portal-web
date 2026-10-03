@@ -4,28 +4,40 @@
  */
 
 import { OBJETIVOS, linkBusca } from "@/lib/busca/filtros";
+import type { FiltrosMeusImoveis } from "./repository";
 import type {
+  Anunciante,
   AnuncianteResumo,
   Bairro,
   BuscaFiltros,
   Cidade,
   ContatoPayload,
   Dica,
+  Encomenda,
   EncomendaPayload,
+  EstatisticaMensal,
+  EstatisticaPeriodo,
   Imovel,
+  ImovelPayload,
   ImovelResumo,
+  ImovelTaxa,
   ImovelTipo,
   Infraestrutura,
   LeadSitePayload,
+  Mensagem,
   Objetivo,
   Paginado,
+  PerfilPayload,
   PesquisaPopular,
   Plano,
   Portal,
   Post,
+  PreferenciaContato,
   Publicidade,
+  RelatorioImportacao,
   TabelaPublicidade,
   TipoAnunciante,
+  UsoPlano,
 } from "./types";
 
 export interface ApiCity {
@@ -542,7 +554,10 @@ export function mapDica(t: ApiTip): Dica {
   return { id: t.id, titulo: t.title, descricao_html: t.body, ativo: true };
 }
 
-export function mapPlano(p: ApiPlan): Plano {
+/** Bloco `plan` da área do anunciante (`/advertiser/me/`): sem os campos de vitrine. */
+export type ApiPlanResumo = Omit<ApiPlan, "is_recommended" | "is_owner_only" | "sort_order"> & Partial<Pick<ApiPlan, "is_recommended" | "is_owner_only" | "sort_order">>;
+
+export function mapPlano(p: ApiPlanResumo): Plano {
   return {
     id: p.id,
     slug: p.slug,
@@ -554,8 +569,8 @@ export function mapPlano(p: ApiPlan): Plano {
     pagina_imobiliaria: p.has_realtor_page,
     encomenda: p.receives_property_requests,
     hotsite: p.has_hotsite,
-    recomendado: p.is_recommended,
-    exclusivo_proprietario: p.is_owner_only,
+    recomendado: p.is_recommended ?? false,
+    exclusivo_proprietario: p.is_owner_only ?? false,
   };
 }
 
@@ -624,3 +639,435 @@ export function traduzirErros(erros: Record<string, string[]> | null | undefined
   for (const [k, v] of Object.entries(erros)) out[campos[k] ?? k] = v;
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// Área do anunciante (`/advertiser/...`, autenticada)
+// ---------------------------------------------------------------------------
+
+/** Contrato de `GET /advertiser/me/`. */
+export interface ApiMe {
+  advertiser_id: string;
+  user_id: string;
+  name: string;
+  email: string;
+  type: "OWNER" | "BROKER" | "AGENCY";
+  portal_slug: string;
+  plan: ApiPlanResumo | null;
+  has_automatic_import: boolean;
+  has_hotsite: boolean;
+  is_published: boolean;
+  document: string;
+  phone: string;
+  phone_secondary: string;
+  whatsapp: string;
+  contact_name: string;
+  website: string;
+  address: string;
+  creci: string;
+  created_at: string;
+}
+export interface ApiPlanUsage {
+  plan: ApiPlanResumo;
+  properties_used: number;
+  featured_used: number;
+  photo_limit: number;
+}
+export interface ApiPhotoPainel {
+  id: string;
+  url: string | null;
+  thumbnail_url: string | null;
+  sort_order: number;
+  is_cover: boolean;
+  is_hosted: boolean;
+}
+export interface ApiFeePainel {
+  id: string;
+  description: string;
+  amount: string | number;
+  period: "MONTHLY" | "YEARLY" | "ONE_TIME";
+  notes: string;
+}
+/** Objeto completo de `/advertiser/properties/` (listagem, detalhe e escrita). */
+export interface ApiPropertyPainel {
+  id: string;
+  reference_code: string;
+  slug: string;
+  title: string;
+  status: "DRAFT" | "PUBLISHED";
+  is_active: boolean;
+  is_featured: boolean;
+  property_type: { id: string; name: string; slug: string };
+  city: { id: string; name: string; slug: string; state_code: string };
+  neighborhood: { id: string; name: string; slug: string } | null;
+  custom_neighborhood_name: string;
+  is_in_condominium: boolean;
+  bedrooms: number;
+  suites: number;
+  bathrooms: number;
+  parking_spaces: number;
+  built_area: string | number | null;
+  total_area: string | number | null;
+  description: string;
+  features: string[];
+  feature_names: string[];
+  condominium_feature_names: string[];
+  fees: ApiFeePainel[];
+  sale_price: string | number | null;
+  rent_price: string | number | null;
+  seasonal_rent_price: string | number | null;
+  photos: ApiPhotoPainel[];
+  cover_photo_url: string | null;
+  views_count: number;
+  created_at: string;
+  updated_at: string;
+}
+export interface ApiInquiry {
+  id: string;
+  property: string | null;
+  property_reference_code: string | null;
+  property_title: string | null;
+  property_slug: string | null;
+  portal_slug: string;
+  name: string;
+  email: string;
+  phone: string;
+  message: string;
+  contact_preferences: Array<"WHATSAPP" | "PHONE" | "EMAIL">;
+  is_mobile: boolean;
+  created_at: string;
+}
+export interface ApiPropertyRequest {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  purpose: "SALE" | "RENT" | "SEASONAL";
+  property_type_name: string | null;
+  city_name: string | null;
+  neighborhood_name: string | null;
+  min_price: string | number | null;
+  max_price: string | number | null;
+  is_in_condominium: boolean | null;
+  funding: "FINANCING" | "CASH" | "FGTS" | "EXCHANGE" | "" | null;
+  message: string;
+  created_at: string;
+}
+export interface ApiMonthlyStat {
+  year_month: string;
+  properties: number;
+  views: number;
+  phone_clicks: number;
+  whatsapp_clicks: number;
+  inquiries: number;
+  property_requests: number;
+}
+export interface ApiPeriodStat {
+  start: string;
+  end: string;
+  properties: number;
+  views: number;
+  phone_clicks: number;
+  whatsapp_clicks: number;
+  inquiries: number;
+  property_requests: number;
+  total_leads: number;
+  by_property: Array<{ property: string | null; reference_code: string; title: string; slug: string | null; views: number; phone_clicks: number; whatsapp_clicks: number; inquiries: number }>;
+}
+export interface ApiImportReport {
+  xml_url: string;
+  last_imported_at: string | null;
+  total: number;
+  valid: number;
+  invalid: Array<{ reference_code: string; reason: string }>;
+  errors: Array<{ date: string; message: string }>;
+}
+
+const FUNDING_TO_RECURSO: Record<string, Encomenda["recurso"]> = { FINANCING: "financiamento", CASH: "a_vista", FGTS: "fgts", EXCHANGE: "permuta" };
+const PREFERENCE_TO_PREFERENCIA: Record<string, PreferenciaContato> = { WHATSAPP: "whatsapp", PHONE: "telefone", EMAIL: "email" };
+const STATUS_TO_API: Record<NonNullable<FiltrosMeusImoveis["status"]>, string> = { ativo: "active", inativo: "inactive", rascunho: "draft" };
+
+export function mapAnunciante(me: ApiMe): Anunciante {
+  return {
+    id: me.advertiser_id,
+    slug: "",
+    tipo: TYPE_TO_TIPO[me.type] ?? "imobiliaria",
+    nome: me.name,
+    documento: me.document,
+    email: me.email,
+    telefone: me.phone,
+    telefone2: me.phone_secondary || null,
+    whatsapp: me.whatsapp || null,
+    logo_url: null,
+    creci: me.creci || null,
+    contato: me.contact_name || null,
+    site: me.website || null,
+    endereco: me.address || null,
+    plano_id: me.plan?.id ?? "",
+    portal_id: "",
+    ativo: true,
+    hotsite: me.has_hotsite,
+    pagina_imobiliaria: me.plan?.has_realtor_page ?? false,
+    recebe_encomenda: me.plan?.receives_property_requests ?? false,
+    url_xml: me.has_automatic_import ? "xml" : null,
+    cadastrado_em: me.created_at,
+  };
+}
+
+export function mapUsoPlano(u: ApiPlanUsage): UsoPlano {
+  return { plano: mapPlano(u.plan), imoveis_usados: u.properties_used, destaques_usados: u.featured_used };
+}
+
+/** Imóvel da área do anunciante. `infraestrutura`/`infra_condominio` ficam com os nomes (como no site público). */
+export function mapImovelPainel(p: ApiPropertyPainel, anuncianteId = ""): Imovel {
+  const fotos = [...p.photos]
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((f) => ({ id: f.id, url: f.url ?? f.thumbnail_url ?? "", mini_url: f.thumbnail_url ?? f.url ?? "", ordem: f.sort_order, principal: f.is_cover }));
+  return {
+    id: p.id,
+    codigo: p.reference_code,
+    slug: p.slug,
+    titulo: p.title,
+    anunciante_id: anuncianteId,
+    portal_id: "",
+    ativo: p.is_active,
+    destaque: p.is_featured,
+    status: p.status === "DRAFT" ? "rascunho" : "publicado",
+    tipo_id: p.property_type.id,
+    tipo_nome: p.property_type.name,
+    cidade_id: p.city.id,
+    cidade_nome: p.city.name,
+    bairro_id: p.neighborhood?.id ?? "",
+    bairro_nome: p.neighborhood?.name ?? p.custom_neighborhood_name ?? "",
+    uf: p.city.state_code,
+    quartos: p.bedrooms,
+    suites: p.suites,
+    banheiros: p.bathrooms,
+    vagas: p.parking_spaces,
+    area_construida: numero(p.built_area),
+    area_total: numero(p.total_area),
+    descricao: p.description,
+    infraestrutura: p.feature_names ?? [],
+    infra_condominio: p.condominium_feature_names ?? [],
+    dentro_condominio: p.is_in_condominium,
+    // `observacao` começa pela periodicidade ("anual"/"mensal") para `imovelParaForm` recuperar o período.
+    taxas: p.fees.map((f) => ({ descricao: f.description, valor: numero(f.amount) ?? 0, observacao: [PERIOD_LABEL[f.period], f.notes].filter(Boolean).join(" · ") || null })),
+    preco_venda: numero(p.sale_price),
+    preco_locacao: numero(p.rent_price),
+    preco_temporada: numero(p.seasonal_rent_price),
+    fotos,
+    foto_principal_url: p.cover_photo_url ?? fotos.find((f) => f.principal)?.mini_url ?? fotos[0]?.mini_url ?? null,
+    visualizacoes: p.views_count ?? 0,
+    criado_em: p.created_at,
+    atualizado_em: p.updated_at,
+  };
+}
+
+export function mapMensagem(m: ApiInquiry): Mensagem {
+  return {
+    id: m.id,
+    anunciante_id: "",
+    imovel_id: m.property,
+    imovel_codigo: m.property_reference_code || null,
+    imovel_titulo: m.property_title || null,
+    portal_id: "",
+    nome: m.name,
+    email: m.email,
+    telefone: m.phone,
+    mensagem: m.message,
+    preferencias: (m.contact_preferences ?? []).map((p) => PREFERENCE_TO_PREFERENCIA[p]).filter((p): p is PreferenciaContato => Boolean(p)),
+    origem: m.is_mobile ? "mobile" : "imovel",
+    criado_em: m.created_at,
+  };
+}
+
+/** A API devolve só os nomes de tipo/cidade/bairro; os ids ficam vazios e os nomes vão nos campos `*_nome`. */
+export function mapEncomenda(e: ApiPropertyRequest): Encomenda {
+  return {
+    id: e.id,
+    portal_id: "",
+    nome: e.name,
+    email: e.email,
+    telefone: e.phone,
+    objetivo: PURPOSE_TO_OBJETIVO[e.purpose] ?? "comprar",
+    tipo_id: null,
+    cidade_id: null,
+    bairro_id: null,
+    tipo_nome: e.property_type_name || null,
+    cidade_nome: e.city_name || null,
+    bairro_nome: e.neighborhood_name || null,
+    valor_min: numero(e.min_price),
+    valor_max: numero(e.max_price),
+    dentro_condominio: e.is_in_condominium ?? null,
+    recurso: e.funding ? (FUNDING_TO_RECURSO[e.funding] ?? null) : null,
+    mensagem: e.message,
+    parceiro: true,
+    criado_em: e.created_at,
+  };
+}
+
+export function mapEstatisticaMensal(m: ApiMonthlyStat): EstatisticaMensal {
+  return {
+    ano_mes: m.year_month,
+    imoveis: m.properties,
+    visualizacoes: m.views,
+    cliques_telefone: m.phone_clicks,
+    cliques_whatsapp: m.whatsapp_clicks,
+    mensagens: m.inquiries,
+    encomendas: m.property_requests,
+  };
+}
+
+export function mapEstatisticaPeriodo(r: ApiPeriodStat, anuncianteId = ""): EstatisticaPeriodo {
+  return {
+    anunciante_id: anuncianteId,
+    inicio: r.start,
+    fim: r.end,
+    imoveis: r.properties,
+    visualizacoes: r.views,
+    cliques_telefone: r.phone_clicks,
+    cliques_whatsapp: r.whatsapp_clicks,
+    mensagens: r.inquiries,
+    encomendas: r.property_requests,
+    total_leads: r.total_leads,
+    // Cliques sem imóvel (contato do hotsite) vêm com `property: null`: ficam só nos totais.
+    por_imovel: r.by_property
+      .filter((p): p is typeof p & { property: string } => Boolean(p.property))
+      .map((p) => ({ imovel_id: p.property, codigo: p.reference_code, titulo: p.title, visualizacoes: p.views, cliques_telefone: p.phone_clicks, cliques_whatsapp: p.whatsapp_clicks, mensagens: p.inquiries })),
+  };
+}
+
+export function mapRelatorioImportacao(r: ApiImportReport, anuncianteId = ""): RelatorioImportacao {
+  return {
+    anunciante_id: anuncianteId,
+    url_xml: r.xml_url,
+    ultima_importacao: r.last_imported_at,
+    total_xml: r.total,
+    validos: r.valid,
+    invalidos: r.invalid.map((i) => ({ codigo: i.reference_code, motivo: i.reason })),
+    erros: r.errors.map((e) => ({ data: e.date, mensagem: e.message })),
+  };
+}
+
+/** Query de `GET /advertiser/properties/`. */
+export function filtrosMeusImoveisParaApi(f: FiltrosMeusImoveis) {
+  const q = new URLSearchParams();
+  if (f.busca) q.set("search", f.busca);
+  if (f.objetivo) q.set("purpose", OBJETIVO_TO_PURPOSE[f.objetivo]);
+  if (f.tipo) q.set("property_type", f.tipo);
+  if (f.cidade) q.set("city", f.cidade);
+  if (f.bairro) q.set("neighborhood", f.bairro);
+  if (f.status) q.set("status", STATUS_TO_API[f.status]);
+  q.set("page", String(f.pagina));
+  q.set("page_size", String(f.por_pagina));
+  return q.toString();
+}
+
+/** Corpo de `PATCH /advertiser/me/`. */
+export function perfilParaApi(p: PerfilPayload) {
+  return {
+    name: p.nome,
+    email: p.email,
+    phone: p.telefone,
+    phone_secondary: p.telefone2 ?? "",
+    whatsapp: p.whatsapp ?? "",
+    contact_name: p.contato ?? "",
+    website: p.site ?? "",
+    address: p.endereco ?? "",
+    creci: p.creci ?? "",
+  };
+}
+
+/** Período da taxa: lê a periodicidade gravada em `observacao` ("anual"/"mensal"); sem ela, IPTU é anual e o resto mensal. */
+function periodoDaTaxa(t: ImovelTaxa): ApiFeePainel["period"] {
+  const obs = (t.observacao ?? "").toLowerCase();
+  if (obs.startsWith("anu")) return "YEARLY";
+  if (obs.startsWith("men")) return "MONTHLY";
+  if (obs.startsWith("ún") || obs.startsWith("un")) return "ONE_TIME";
+  return /iptu/i.test(t.descricao) ? "YEARLY" : "MONTHLY";
+}
+
+/** Observação sem o rótulo de periodicidade que `mapImovelPainel` acrescenta. */
+function notasDaTaxa(t: ImovelTaxa) {
+  const obs = (t.observacao ?? "").trim();
+  if (!obs) return "";
+  const rotulos = Object.values(PERIOD_LABEL);
+  if (rotulos.includes(obs.toLowerCase())) return "";
+  const [primeiro, ...resto] = obs.split(" · ");
+  return rotulos.includes((primeiro ?? "").toLowerCase()) ? resto.join(" · ") : obs;
+}
+
+/**
+ * Corpo de `POST/PATCH /advertiser/properties/`. `infraestrutura`/`infra_condominio`
+ * podem trazer ids (formulário) ou nomes (imóvel já mapeado); ambos viram UUID pelo catálogo.
+ */
+export function imovelParaApi(p: ImovelPayload, catalogo: Infraestrutura[]) {
+  const porId = new Map(catalogo.map((i) => [i.id, i.id]));
+  const porNome = new Map(catalogo.map((i) => [i.nome.trim().toLowerCase(), i.id]));
+  const features = Array.from(new Set([...p.infraestrutura, ...p.infra_condominio].map((x) => porId.get(x) ?? porNome.get(x.trim().toLowerCase())).filter((x): x is string => Boolean(x))));
+  return {
+    reference_code: p.codigo,
+    is_active: p.ativo,
+    is_featured: p.destaque,
+    property_type: p.tipo_id,
+    city: p.cidade_id,
+    neighborhood: p.bairro_id || null,
+    custom_neighborhood_name: "",
+    is_in_condominium: p.dentro_condominio,
+    bedrooms: p.quartos,
+    suites: p.suites,
+    bathrooms: p.banheiros,
+    parking_spaces: p.vagas,
+    built_area: p.area_construida,
+    total_area: p.area_total,
+    sale_price: p.preco_venda,
+    rent_price: p.preco_locacao,
+    seasonal_rent_price: p.preco_temporada,
+    fees: p.taxas.map((t) => ({ description: t.descricao, amount: t.valor, period: periodoDaTaxa(t), notes: notasDaTaxa(t) })),
+    description: p.descricao,
+    features,
+  };
+}
+
+/** Converte a data URL (`data:image/jpeg;base64,...`) enviada pelo painel em arquivo para o multipart. */
+export function arquivoDeDataUrl(dataUrl: string, nomeBase: string): File {
+  const m = /^data:(image\/[a-z0-9.+-]+);base64,([\s\S]*)$/i.exec(dataUrl);
+  if (!m) throw new Error("Imagem em formato inválido.");
+  const tipo = m[1]!.toLowerCase();
+  const ext = tipo === "image/jpeg" || tipo === "image/jpg" ? "jpg" : tipo.split("/")[1] ?? "img";
+  const buf = Buffer.from(m[2]!, "base64");
+  return new File([new Uint8Array(buf)], `${nomeBase}.${ext}`, { type: tipo });
+}
+
+export const CAMPOS_PERFIL: Record<string, string> = {
+  name: "nome",
+  email: "email",
+  phone: "telefone",
+  phone_secondary: "telefone2",
+  whatsapp: "whatsapp",
+  contact_name: "contato",
+  website: "site",
+  address: "endereco",
+  creci: "creci",
+};
+export const CAMPOS_IMOVEL: Record<string, string> = {
+  reference_code: "codigo",
+  is_active: "ativo",
+  is_featured: "destaque",
+  property_type: "tipo_id",
+  city: "cidade_id",
+  neighborhood: "bairro_id",
+  custom_neighborhood_name: "bairro_id",
+  is_in_condominium: "dentro_condominio",
+  bedrooms: "quartos",
+  suites: "suites",
+  bathrooms: "banheiros",
+  parking_spaces: "vagas",
+  built_area: "area_construida",
+  total_area: "area_total",
+  sale_price: "preco_venda",
+  rent_price: "preco_locacao",
+  seasonal_rent_price: "preco_temporada",
+  fees: "iptu_valor",
+  description: "descricao",
+  features: "infraestrutura",
+};

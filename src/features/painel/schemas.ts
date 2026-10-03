@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Imovel, ImovelPayload, ImovelTaxa } from "@/lib/api/types";
+import type { Imovel, ImovelPayload, ImovelTaxa, Infraestrutura } from "@/lib/api/types";
 
 const texto = (max: number) => z.string().trim().max(max, `Máximo de ${max} caracteres.`);
 const opcional = (max: number) => texto(max).optional().or(z.literal(""));
@@ -114,8 +114,16 @@ function periodo(obs: string | null): "anual" | "mensal" | null {
   return null;
 }
 
+/** Os checkboxes de infraestrutura guardam ids; o imóvel traz nomes. Com o catálogo, converte nomes em ids. */
+function idsDeInfra(valores: string[], catalogo: Infraestrutura[] | undefined) {
+  if (!catalogo?.length) return [...valores];
+  const porNome = new Map(catalogo.map((c) => [c.nome.trim().toLowerCase(), c.id]));
+  const ids = new Set(catalogo.map((c) => c.id));
+  return valores.map((v) => (ids.has(v) ? v : porNome.get(v.trim().toLowerCase()))).filter((v): v is string => Boolean(v));
+}
+
 /** Converte um imóvel existente nos valores do formulário. */
-export function imovelParaForm(i: Imovel): ImovelFormValues {
+export function imovelParaForm(i: Imovel, infraestruturas?: Infraestrutura[]): ImovelFormValues {
   const iptu = i.taxas.find((t) => t.descricao.toLowerCase() === TAXA_IPTU.toLowerCase());
   const cond = i.taxas.find((t) => t.descricao.toLowerCase().startsWith("condom"));
   return {
@@ -140,8 +148,8 @@ export function imovelParaForm(i: Imovel): ImovelFormValues {
     condominio_valor: cond?.valor ?? null,
     condominio_periodo: periodo(cond?.observacao ?? null) ?? "mensal",
     descricao: i.descricao,
-    infraestrutura: [...i.infraestrutura],
-    infra_condominio: [...i.infra_condominio],
+    infraestrutura: idsDeInfra(i.infraestrutura, infraestruturas),
+    infra_condominio: idsDeInfra(i.infra_condominio, infraestruturas),
   };
 }
 

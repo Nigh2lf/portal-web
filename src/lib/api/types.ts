@@ -261,6 +261,10 @@ export interface Encomenda {
   tipo_id: string | null;
   cidade_id: string | null;
   bairro_id: string | null;
+  /** Nomes já resolvidos (a API do painel devolve só nomes); quando ausentes, a tela resolve pelos ids. */
+  tipo_nome?: string | null;
+  cidade_nome?: string | null;
+  bairro_nome?: string | null;
   valor_min: number | null;
   valor_max: number | null;
   dentro_condominio: boolean | null;

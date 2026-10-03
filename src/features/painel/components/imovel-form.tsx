@@ -39,7 +39,7 @@ export function ImovelForm({ imovel, tipos, cidades, bairrosIniciais, infraestru
 
   const form = useForm<ImovelFormValues>({
     resolver: zodResolver(imovelSchema),
-    defaultValues: imovel ? imovelParaForm(imovel) : IMOVEL_VALORES_INICIAIS,
+    defaultValues: imovel ? imovelParaForm(imovel, infraestruturas) : IMOVEL_VALORES_INICIAIS,
   });
   const { register, control, handleSubmit, setError, setValue, formState } = form;
   const erros = formState.errors;

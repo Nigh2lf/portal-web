@@ -1,32 +1,70 @@
-import type { ImovelDetalhe, PortalRepository } from "./repository";
-import type { Bairro, BuscaFiltros, BuscaResultado, Dica, HomeDados, Paginado, Plano, Portal, Post, Publicidade, ResultadoAcao, SessaoUsuario, TabelaPublicidade } from "./types";
+import type { FiltrosMeusImoveis, ImovelDetalhe, PortalRepository } from "./repository";
+import type {
+  Anunciante,
+  Bairro,
+  BuscaFiltros,
+  BuscaResultado,
+  Dica,
+  Encomenda,
+  EstatisticaMensal,
+  EstatisticaPeriodo,
+  HomeDados,
+  Imovel,
+  ImovelPayload,
+  Mensagem,
+  Paginado,
+  PerfilPayload,
+  Plano,
+  Portal,
+  Post,
+  Publicidade,
+  RelatorioImportacao,
+  ResultadoAcao,
+  SessaoUsuario,
+  TabelaPublicidade,
+  UsoPlano,
+} from "./types";
 import { descricaoBusca, tituloBusca } from "@/lib/busca/titulo";
 import { getAccessToken, hashSenha } from "@/lib/auth/session";
 import {
   CAMPOS_CONTATO,
   CAMPOS_ENCOMENDA,
+  CAMPOS_IMOVEL,
   CAMPOS_LEAD_SITE,
+  CAMPOS_PERFIL,
+  arquivoDeDataUrl,
   contatoParaApi,
   encomendaParaApi,
+  filtrosMeusImoveisParaApi,
   filtrosParaApi,
+  imovelParaApi,
   leadSiteParaApi,
+  mapAnunciante,
   mapAnuncianteResumo,
   mapBairro,
   mapBairroMaisAnunciado,
   mapCidade,
   mapDica,
+  mapEncomenda,
+  mapEstatisticaMensal,
+  mapEstatisticaPeriodo,
   mapImovel,
+  mapImovelPainel,
   mapImovelResumo,
   mapInfra,
   mapLinkRelacionado,
+  mapMensagem,
   mapPaginado,
   mapPesquisaPopular,
   mapPlano,
   mapPortal,
   mapPost,
   mapPublicidade,
+  mapRelatorioImportacao,
   mapTabelaPublicidade,
   mapTipo,
+  mapUsoPlano,
+  perfilParaApi,
   traduzirErros,
   type ApiAd,
   type ApiAdPlacement,
@@ -34,14 +72,22 @@ import {
   type ApiBanner,
   type ApiCity,
   type ApiFeature,
+  type ApiImportReport,
+  type ApiInquiry,
+  type ApiMe,
+  type ApiMonthlyStat,
   type ApiNeighborhood,
   type ApiPaginado,
+  type ApiPeriodStat,
   type ApiPlan,
+  type ApiPlanUsage,
   type ApiPortal,
   type ApiPostCard,
   type ApiPostDetail,
   type ApiPropertyCard,
   type ApiPropertyDetail,
+  type ApiPropertyPainel,
+  type ApiPropertyRequest,
   type ApiPropertyType,
   type ApiRelatedLink,
   type ApiSearchResult,
@@ -49,6 +95,8 @@ import {
   type ApiTopNeighborhood,
   type ApiTopSearch,
 } from "./mappers";
+
+export type { ApiMe } from "./mappers";
 
 /** Envelope padrão da API Django: `{success, status, message, data, error}`. */
 export interface Envelope<T> {
@@ -80,9 +128,8 @@ const REVALIDATE_PORTAL = 300;
 const REVALIDATE_HOME = 120;
 
 /**
- * Repositório HTTP contra a API Django. Os métodos já migrados consultam a
- * API; os demais delegam ao `fallback` (mock) até os endpoints existirem,
- * traduzindo o id do portal da API para o id do mock pelo slug.
+ * Repositório HTTP contra a API Django: site público (`/public/...`), sessão
+ * (`/auth/...`) e área do anunciante (`/advertiser/...`, com o JWT dos cookies).
  */
 export class HttpRepository implements PortalRepository {
   private portaisPorId = new Map<string, Portal>();
@@ -91,8 +138,11 @@ export class HttpRepository implements PortalRepository {
 
   constructor(
     private baseUrl: string,
-    private fallback: PortalRepository,
-  ) {}
+    fallback?: PortalRepository,
+  ) {
+    // Mantido na assinatura por compatibilidade com `getRepository()`; tudo já vem da API.
+    void fallback;
+  }
 
   // ------------------------------------------------------------- transporte
   protected async request<T>(path: string, init: RequestInit & { token?: string; revalidate?: number } = {}): Promise<T> {
@@ -107,12 +157,25 @@ export class HttpRepository implements PortalRepository {
       next: revalidate !== undefined ? { revalidate } : undefined,
       cache: revalidate === undefined ? "no-store" : undefined,
     });
-    const json = (await res.json().catch(() => null)) as Envelope<T> | null;
-    if (!res.ok || !json?.success) {
-      const erros = json?.error && !("detail" in json.error) ? (json.error as Record<string, string[]>) : null;
-      throw new ApiError(res.status, json?.message ?? res.statusText, erros);
+    // DELETE responde 204 sem corpo.
+    if (res.status === 204) return undefined as T;
+    const json = (await res.json().catch(() => null)) as Envelope<T> | Record<string, unknown> | null;
+    const comEnvelope = Boolean(json && typeof json === "object" && "success" in json);
+    if (comEnvelope) {
+      const env = json as Envelope<T>;
+      if (!res.ok || !env.success) {
+        const erros = env.error && !("detail" in env.error) ? (env.error as Record<string, string[]>) : null;
+        throw new ApiError(res.status, env.message || res.statusText, erros);
+      }
+      return env.data;
     }
-    return json.data;
+    // Fora do envelope (ex.: `auth/login`, `auth/refresh` do SimpleJWT): corpo cru.
+    if (!res.ok) {
+      const detail = (json as { detail?: string } | null)?.detail;
+      const erros = json && typeof json === "object" && !detail ? (json as Record<string, string[]>) : null;
+      throw new ApiError(res.status, detail || res.statusText, erros);
+    }
+    return json as T;
   }
 
   private lembrar(portal: Portal) {
@@ -130,11 +193,24 @@ export class HttpRepository implements PortalRepository {
     return achado.slug;
   }
 
-  /** Id equivalente no mock (mesmo slug), para os métodos ainda não migrados. */
-  private async idNoFallback(portalId: string) {
-    const slug = await this.slugDoPortal(portalId);
-    const mock = await this.fallback.getPortalBySlug(slug);
-    return mock?.id ?? portalId;
+  /**
+   * Catálogo sem portal informado (painel): o do primeiro portal conhecido; se
+   * uma cidade foi pedida e não está nele, procura nos demais portais.
+   */
+  private async catalogoPadrao(cidade?: { id?: string; slug?: string }): Promise<Catalogo | null> {
+    const slugs = Array.from(this.portaisPorSlug.keys());
+    if (!slugs.length) slugs.push(...(await this.listPortais()).map((p) => p.slug));
+    if (!slugs.length) return null;
+    const temCidade = (cat: Catalogo) => cat.cities.some((c) => (cidade?.id && c.id === cidade.id) || (cidade?.slug && c.slug === cidade.slug));
+    const primeiro = await this.catalogo(slugs[0]!);
+    if (!cidade?.id && !cidade?.slug) return primeiro;
+    if (temCidade(primeiro)) return primeiro;
+    const todos = Array.from(new Set([...slugs.slice(1), ...(await this.listPortais()).map((p) => p.slug)]));
+    for (const slug of todos) {
+      const cat = await this.catalogo(slug);
+      if (temCidade(cat)) return cat;
+    }
+    return primeiro;
   }
 
   private catalogo(slug: string) {
@@ -181,9 +257,8 @@ export class HttpRepository implements PortalRepository {
   }
 
   async listBairros(opts: { cidadeId?: string; cidadeSlug?: string; portalId?: string; anuncianteId?: string; comImoveis?: boolean }): Promise<Bairro[]> {
-    if (!opts.portalId) return this.fallback.listBairros(opts);
-    const slug = await this.slugDoPortal(opts.portalId);
-    const cat = await this.catalogo(slug);
+    const cat = opts.portalId ? await this.catalogo(await this.slugDoPortal(opts.portalId)) : await this.catalogoPadrao({ id: opts.cidadeId, slug: opts.cidadeSlug });
+    if (!cat) return [];
     const cidade = opts.cidadeId ? cat.cities.find((c) => c.id === opts.cidadeId) : opts.cidadeSlug ? cat.cities.find((c) => c.slug === opts.cidadeSlug) : undefined;
     return cat.neighborhoods
       .filter((b) => !cidade || b.city === cidade.id)
@@ -245,8 +320,8 @@ export class HttpRepository implements PortalRepository {
   }
 
   async registrarCliquePublicidade(publicidadeId: string) {
-    const slug = this.portaisPorSlug.keys().next().value;
-    if (!slug) return this.fallback.registrarCliquePublicidade(publicidadeId);
+    const slug = this.portaisPorSlug.keys().next().value ?? (await this.listPortais())[0]?.slug;
+    if (!slug) return null;
     try {
       const r = await this.request<{ link_url: string }>(`/public/portals/${slug}/ads/${publicidadeId}/click/`);
       return r.link_url || null;
@@ -541,60 +616,183 @@ export class HttpRepository implements PortalRepository {
     return this.postarFormulario(`/public/portals/${slug}/advertiser-leads/`, leadSiteParaApi(p), "Recebemos seu interesse. Nossa equipe vai entrar em contato.", "Não foi possível enviar seu contato.", CAMPOS_LEAD_SITE);
   };
 
-  // ---------------------------------------------- ainda no mock (fase 3)
-  alterarSenha: PortalRepository["alterarSenha"] = (a, b, c) => this.fallback.alterarSenha(a, b, c);
-  getAnunciante: PortalRepository["getAnunciante"] = (a) => this.fallback.getAnunciante(a);
-  atualizarPerfil: PortalRepository["atualizarPerfil"] = (a, p) => this.fallback.atualizarPerfil(a, p);
-  getUsoPlano: PortalRepository["getUsoPlano"] = (a) => this.fallback.getUsoPlano(a);
-  listMeusImoveis: PortalRepository["listMeusImoveis"] = (a, f) => this.fallback.listMeusImoveis(a, f);
-  getMeuImovel: PortalRepository["getMeuImovel"] = (a, i) => this.fallback.getMeuImovel(a, i);
-  criarImovel: PortalRepository["criarImovel"] = (a, p) => this.fallback.criarImovel(a, p);
-  atualizarImovel: PortalRepository["atualizarImovel"] = (a, i, p) => this.fallback.atualizarImovel(a, i, p);
-  excluirImovel: PortalRepository["excluirImovel"] = (a, i) => this.fallback.excluirImovel(a, i);
-  adicionarFotos: PortalRepository["adicionarFotos"] = (a, i, u) => this.fallback.adicionarFotos(a, i, u);
-  removerFoto: PortalRepository["removerFoto"] = (a, i, f) => this.fallback.removerFoto(a, i, f);
-  removerTodasFotos: PortalRepository["removerTodasFotos"] = (a, i) => this.fallback.removerTodasFotos(a, i);
-  definirFotoPrincipal: PortalRepository["definirFotoPrincipal"] = (a, i, f) => this.fallback.definirFotoPrincipal(a, i, f);
-  reordenarFotos: PortalRepository["reordenarFotos"] = (a, i, f) => this.fallback.reordenarFotos(a, i, f);
-  listMensagens: PortalRepository["listMensagens"] = (a, o) => this.fallback.listMensagens(a, o);
-  listEncomendasRecebidas: PortalRepository["listEncomendasRecebidas"] = (a) => this.fallback.listEncomendasRecebidas(a);
-  getEstatisticasMensais: PortalRepository["getEstatisticasMensais"] = (a, m) => this.fallback.getEstatisticasMensais(a, m);
-  getEstatisticasPeriodo: PortalRepository["getEstatisticasPeriodo"] = (a, i, f) => this.fallback.getEstatisticasPeriodo(a, i, f);
-  getRelatorioImportacao: PortalRepository["getRelatorioImportacao"] = (a) => this.fallback.getRelatorioImportacao(a);
-}
+  // ------------------------------------------------------ painel: anunciante
+  // O anunciante é sempre o da sessão (token); o `anuncianteId` do contrato só
+  // preenche os campos de referência dos objetos devolvidos.
+  private static readonly PAINEL = "/advertiser";
 
-/** Contrato de `GET /advertiser/me/` (área do anunciante). */
-export interface ApiMe {
-  advertiser_id: string;
-  user_id: string;
-  name: string;
-  email: string;
-  type: "OWNER" | "BROKER" | "AGENCY";
-  portal_slug: string;
-  plan: {
-    id: string;
-    slug: string;
-    name: string;
-    property_limit: number;
-    photo_limit: number;
-    featured_limit: number;
-    has_hotsite: boolean;
-    has_realtor_page: boolean;
-    receives_property_requests: boolean;
-    monthly_price: string | number | null;
-  } | null;
-  has_automatic_import: boolean;
-  has_hotsite: boolean;
-  is_published: boolean;
-  document: string;
-  phone: string;
-  phone_secondary: string;
-  whatsapp: string;
-  contact_name: string;
-  website: string;
-  address: string;
-  creci: string;
-  created_at: string;
+  /** Erro 400 da API → `ResultadoAcao` com os campos traduzidos; demais erros propagam. */
+  private falha(e: unknown, campos: Record<string, string> = {}): ResultadoAcao<never> {
+    if (!(e instanceof ApiError)) throw e;
+    const erros = traduzirErros(e.erros, campos);
+    const detalhe = erros ? Object.values(erros).flat().join(" ") : "";
+    return { ok: false, mensagem: e.status === 404 ? "Imóvel não encontrado." : detalhe || e.message, erros };
+  }
+
+  async getAnunciante(): Promise<Anunciante | null> {
+    try {
+      return mapAnunciante(await this.requestAuth<ApiMe>(`${HttpRepository.PAINEL}/me/`));
+    } catch (e) {
+      if (e instanceof ApiError && (e.status === 401 || e.status === 404)) return null;
+      throw e;
+    }
+  }
+
+  async atualizarPerfil(_anuncianteId: string, payload: PerfilPayload): Promise<ResultadoAcao<Anunciante>> {
+    try {
+      const me = await this.requestAuth<ApiMe>(`${HttpRepository.PAINEL}/me/`, { method: "PATCH", body: JSON.stringify(perfilParaApi(payload)) });
+      return { ok: true, dados: mapAnunciante(me), mensagem: "Cadastro atualizado." };
+    } catch (e) {
+      return this.falha(e, CAMPOS_PERFIL);
+    }
+  }
+
+  async alterarSenha(_anuncianteId: string, atual: string, nova: string): Promise<ResultadoAcao> {
+    try {
+      await this.requestAuth(`${HttpRepository.PAINEL}/me/change-password/`, {
+        method: "POST",
+        body: JSON.stringify({ old_password: hashSenha(atual), new_password: hashSenha(nova) }),
+      });
+      return { ok: true, mensagem: "Senha alterada com sucesso." };
+    } catch (e) {
+      return this.falha(e, { old_password: "senha_atual", new_password: "senha_nova" });
+    }
+  }
+
+  async getUsoPlano(): Promise<UsoPlano> {
+    return mapUsoPlano(await this.requestAuth<ApiPlanUsage>(`${HttpRepository.PAINEL}/me/plan-usage/`));
+  }
+
+  // -------------------------------------------------------- painel: imóveis
+  private imovelUrl(imovelId: string, sufixo = "") {
+    return `${HttpRepository.PAINEL}/properties/${encodeURIComponent(imovelId)}/${sufixo}`;
+  }
+
+  async listMeusImoveis(anuncianteId: string, filtros: FiltrosMeusImoveis): Promise<Paginado<Imovel>> {
+    const vazio: Paginado<Imovel> = { resultados: [], total: 0, pagina: filtros.pagina, por_pagina: filtros.por_pagina, total_paginas: 0 };
+    try {
+      const r = await this.requestAuth<ApiPaginado<ApiPropertyPainel>>(`${HttpRepository.PAINEL}/properties/?${filtrosMeusImoveisParaApi(filtros)}`);
+      return mapPaginado(r, (p) => mapImovelPainel(p, anuncianteId));
+    } catch (e) {
+      // Página fora do intervalo responde 404.
+      if (e instanceof ApiError && e.status === 404) return vazio;
+      throw e;
+    }
+  }
+
+  async getMeuImovel(anuncianteId: string, imovelId: string): Promise<Imovel | null> {
+    try {
+      return mapImovelPainel(await this.requestAuth<ApiPropertyPainel>(this.imovelUrl(imovelId)), anuncianteId);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }
+  }
+
+  private async salvarImovel(anuncianteId: string, imovelId: string | null, payload: ImovelPayload): Promise<ResultadoAcao<Imovel>> {
+    const catalogo = await this.listInfraestruturas();
+    const body = JSON.stringify(imovelParaApi(payload, catalogo));
+    try {
+      const r = imovelId
+        ? await this.requestAuth<ApiPropertyPainel>(this.imovelUrl(imovelId), { method: "PATCH", body })
+        : await this.requestAuth<ApiPropertyPainel>(`${HttpRepository.PAINEL}/properties/`, { method: "POST", body });
+      return { ok: true, dados: mapImovelPainel(r, anuncianteId), mensagem: imovelId ? "Imóvel atualizado." : "Imóvel cadastrado." };
+    } catch (e) {
+      const r = this.falha(e, CAMPOS_IMOVEL);
+      return r.erros ? { ...r, mensagem: "Verifique os campos destacados." } : r;
+    }
+  }
+
+  criarImovel(anuncianteId: string, payload: ImovelPayload) {
+    return this.salvarImovel(anuncianteId, null, payload);
+  }
+
+  atualizarImovel(anuncianteId: string, imovelId: string, payload: ImovelPayload) {
+    return this.salvarImovel(anuncianteId, imovelId, payload);
+  }
+
+  async excluirImovel(_anuncianteId: string, imovelId: string): Promise<ResultadoAcao> {
+    try {
+      await this.requestAuth(this.imovelUrl(imovelId), { method: "DELETE" });
+      return { ok: true, mensagem: "Imóvel excluído." };
+    } catch (e) {
+      return this.falha(e);
+    }
+  }
+
+  // ---------------------------------------------------------- painel: fotos
+  /** Executa a ação nas fotos e devolve o imóvel atualizado (os endpoints só retornam a lista de fotos). */
+  private async acaoFotos(anuncianteId: string, imovelId: string, sufixo: string, init: RequestInit): Promise<ResultadoAcao<Imovel>> {
+    try {
+      await this.requestAuth(this.imovelUrl(imovelId, sufixo), init);
+    } catch (e) {
+      return this.falha(e);
+    }
+    const imovel = await this.getMeuImovel(anuncianteId, imovelId);
+    return imovel ? { ok: true, dados: imovel } : { ok: false, mensagem: "Imóvel não encontrado." };
+  }
+
+  adicionarFotos(anuncianteId: string, imovelId: string, urls: string[]) {
+    const form = new FormData();
+    urls.forEach((u, k) => form.append("images", arquivoDeDataUrl(u, `foto-${k + 1}`)));
+    return this.acaoFotos(anuncianteId, imovelId, "photos/", { method: "POST", body: form });
+  }
+
+  removerFoto(anuncianteId: string, imovelId: string, fotoId: string) {
+    return this.acaoFotos(anuncianteId, imovelId, `photos/${encodeURIComponent(fotoId)}/`, { method: "DELETE" });
+  }
+
+  removerTodasFotos(anuncianteId: string, imovelId: string) {
+    return this.acaoFotos(anuncianteId, imovelId, "photos/", { method: "DELETE" });
+  }
+
+  definirFotoPrincipal(anuncianteId: string, imovelId: string, fotoId: string) {
+    return this.acaoFotos(anuncianteId, imovelId, `photos/${encodeURIComponent(fotoId)}/cover/`, { method: "POST" });
+  }
+
+  reordenarFotos(anuncianteId: string, imovelId: string, fotoIds: string[]) {
+    return this.acaoFotos(anuncianteId, imovelId, "photos/reorder/", { method: "POST", body: JSON.stringify({ ids: fotoIds }) });
+  }
+
+  // ------------------------------------- painel: ofertas, encomendas, relatórios
+  async listMensagens(_anuncianteId: string, opts: { inicio?: string; fim?: string; pagina: number; por_pagina: number }): Promise<Paginado<Mensagem>> {
+    const q = new URLSearchParams();
+    if (opts.inicio) q.set("created_at__gte", opts.inicio);
+    // Data pura no `__lte` é interpretada como 00:00: inclui o dia final inteiro.
+    if (opts.fim) q.set("created_at__lte", /^\d{4}-\d{2}-\d{2}$/.test(opts.fim) ? `${opts.fim}T23:59:59` : opts.fim);
+    q.set("page", String(opts.pagina));
+    q.set("page_size", String(opts.por_pagina));
+    try {
+      return mapPaginado(await this.requestAuth<ApiPaginado<ApiInquiry>>(`${HttpRepository.PAINEL}/inquiries/?${q}`), mapMensagem);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return { resultados: [], total: 0, pagina: opts.pagina, por_pagina: opts.por_pagina, total_paginas: 0 };
+      throw e;
+    }
+  }
+
+  async listEncomendasRecebidas(): Promise<Encomenda[]> {
+    const r = await this.requestAuth<ApiPaginado<ApiPropertyRequest>>(`${HttpRepository.PAINEL}/property-requests/?page_size=100`);
+    return r.results.map(mapEncomenda);
+  }
+
+  async getEstatisticasMensais(_anuncianteId: string, meses = 3): Promise<EstatisticaMensal[]> {
+    const lista = await this.requestAuth<ApiMonthlyStat[]>(`${HttpRepository.PAINEL}/stats/monthly/?months=${Math.min(24, Math.max(1, meses))}`);
+    return lista.map(mapEstatisticaMensal);
+  }
+
+  async getEstatisticasPeriodo(anuncianteId: string, inicio: string, fim: string): Promise<EstatisticaPeriodo> {
+    const q = new URLSearchParams({ start: inicio, end: fim });
+    return mapEstatisticaPeriodo(await this.requestAuth<ApiPeriodStat>(`${HttpRepository.PAINEL}/stats/period/?${q}`), anuncianteId);
+  }
+
+  async getRelatorioImportacao(anuncianteId: string): Promise<RelatorioImportacao | null> {
+    try {
+      return mapRelatorioImportacao(await this.requestAuth<ApiImportReport>(`${HttpRepository.PAINEL}/import-report/`), anuncianteId);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }
+  }
 }
 
 const CAMPOS_CADASTRO: Record<string, string> = {

@@ -40,11 +40,11 @@ export function EncomendasLista({ encomendas, tipos, cidades, bairros }: Props) 
             <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
               <div>
                 <dt className="text-xs text-muted-foreground">Tipo</dt>
-                <dd>{nome(tipos, e.tipo_id) ?? "Qualquer"}</dd>
+                <dd>{e.tipo_nome ?? nome(tipos, e.tipo_id) ?? "Qualquer"}</dd>
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">Local</dt>
-                <dd>{[nome(bairros, e.bairro_id), nome(cidades, e.cidade_id)].filter(Boolean).join(", ") || "Qualquer"}</dd>
+                <dd>{[e.bairro_nome ?? nome(bairros, e.bairro_id), e.cidade_nome ?? nome(cidades, e.cidade_id)].filter(Boolean).join(", ") || "Qualquer"}</dd>
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">Faixa de valor</dt>
