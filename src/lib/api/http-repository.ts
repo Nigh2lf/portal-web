@@ -1,23 +1,32 @@
-import type { PortalRepository } from "./repository";
-import type { Bairro, HomeDados, Portal, Publicidade } from "./types";
+import type { ImovelDetalhe, PortalRepository } from "./repository";
+import type { Bairro, BuscaFiltros, BuscaResultado, HomeDados, Portal, Publicidade } from "./types";
+import { descricaoBusca, tituloBusca } from "@/lib/busca/titulo";
 import {
+  filtrosParaApi,
+  mapAnuncianteResumo,
   mapBairro,
   mapBairroMaisAnunciado,
   mapCidade,
+  mapImovel,
   mapImovelResumo,
   mapInfra,
+  mapLinkRelacionado,
   mapPesquisaPopular,
   mapPortal,
   mapPublicidade,
   mapTipo,
   type ApiAd,
+  type ApiAdvertiser,
   type ApiBanner,
   type ApiCity,
   type ApiFeature,
   type ApiNeighborhood,
   type ApiPortal,
   type ApiPropertyCard,
+  type ApiPropertyDetail,
   type ApiPropertyType,
+  type ApiRelatedLink,
+  type ApiSearchResult,
   type ApiTopNeighborhood,
   type ApiTopSearch,
 } from "./mappers";
@@ -227,20 +236,103 @@ export class HttpRepository implements PortalRepository {
     }
   }
 
+  // -------------------------------------------------- busca, detalhe, favoritos
+  async buscarImoveis(portalId: string, f: BuscaFiltros): Promise<BuscaResultado> {
+    const slug = await this.slugDoPortal(portalId);
+    const portal = this.portaisPorId.get(portalId) ?? (await this.getPortalBySlug(slug));
+    const r = await this.request<ApiSearchResult>(`/public/portals/${slug}/properties/?${filtrosParaApi(f)}`);
+    const titulo = tituloBusca(f, {
+      tipo: r.applied.property_type?.name,
+      cidade: r.applied.city?.name,
+      bairro: r.applied.neighborhood?.name,
+      cidadePadrao: portal?.cidade_principal_nome ?? "",
+    });
+    return {
+      resultados: r.results.map(mapImovelResumo),
+      total: r.count,
+      pagina: r.page,
+      por_pagina: r.page_size,
+      total_paginas: r.total_pages,
+      contadores: { comprar: r.counters.sale, alugar: r.counters.rent, temporada: r.counters.seasonal },
+      valor_maximo: Number(r.max_price) || 0,
+      titulo,
+      descricao_seo: descricaoBusca(titulo, r.count, portal?.nome ?? ""),
+    };
+  }
+
+  async getImovel(portalId: string, slugOuId: string): Promise<ImovelDetalhe | null> {
+    const slug = await this.slugDoPortal(portalId);
+    try {
+      const r = await this.request<{ property: ApiPropertyDetail; related: ApiPropertyCard[]; related_links: ApiRelatedLink[] }>(
+        `/public/portals/${slug}/properties/${encodeURIComponent(slugOuId)}/`,
+      );
+      return {
+        imovel: mapImovel(r.property, portalId),
+        anunciante: mapAnuncianteResumo(r.property.advertiser),
+        relacionados: r.related.map(mapImovelResumo),
+        links_relacionados: r.related_links.map(mapLinkRelacionado),
+      };
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }
+  }
+
+  async listImoveisPorIds(portalId: string, ids: string[]) {
+    if (!ids.length) return [];
+    const slug = await this.slugDoPortal(portalId);
+    const r = await this.request<ApiPropertyCard[]>(`/public/portals/${slug}/properties/by-ids/?ids=${encodeURIComponent(ids.join(","))}`);
+    return r.map(mapImovelResumo);
+  }
+
+  async listAnunciantes(portalId: string) {
+    const slug = await this.slugDoPortal(portalId);
+    const r = await this.request<{ agencies: ApiAdvertiser[]; brokers: ApiAdvertiser[] }>(`/public/portals/${slug}/advertisers/`);
+    return { imobiliarias: r.agencies.map(mapAnuncianteResumo), corretores: r.brokers.map(mapAnuncianteResumo) };
+  }
+
+  async getAnunciantePublico(portalId: string, anuncianteSlug: string) {
+    const slug = await this.slugDoPortal(portalId);
+    try {
+      const r = await this.request<ApiAdvertiser>(`/public/portals/${slug}/advertisers/${anuncianteSlug}/`);
+      return mapAnuncianteResumo(r);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }
+  }
+
+  async registrarClique(input: { imovelId?: string; anuncianteId: string; tipo: "telefone" | "whatsapp" }) {
+    const slug = this.portaisPorSlug.keys().next().value ?? (await this.listPortais())[0]?.slug;
+    if (!slug) return;
+    await this.request(`/public/portals/${slug}/properties/contact-clicks/`, {
+      method: "POST",
+      body: JSON.stringify({ property: input.imovelId ?? null, advertiser: input.anuncianteId || null, channel: input.tipo === "whatsapp" ? "WHATSAPP" : "PHONE" }),
+    }).catch(() => undefined);
+  }
+
+  contatarAnunciante: PortalRepository["contatarAnunciante"] = async (portalId, p) => {
+    const slug = await this.slugDoPortal(portalId);
+    const pref = p.preferencias.map((x) => (x === "whatsapp" ? "WHATSAPP" : x === "telefone" ? "PHONE" : "EMAIL"));
+    try {
+      await this.request(`/public/portals/${slug}/properties/inquiries/`, {
+        method: "POST",
+        body: JSON.stringify({ property: p.imovel_id, name: p.nome, email: p.email, phone: p.telefone, message: p.mensagem, contact_preferences: pref, recaptcha_token: p.recaptcha_token }),
+      });
+      return { ok: true, mensagem: "Sua mensagem foi enviada ao anunciante." };
+    } catch (e) {
+      if (e instanceof ApiError) return { ok: false, mensagem: e.status === 403 ? "Não foi possível enviar sua mensagem." : e.message, erros: e.erros ?? undefined };
+      throw e;
+    }
+  };
+
   // ---------------------------------------------- ainda no mock (fase 3)
   listPlanos = () => this.fallback.listPlanos();
   getTabelaPublicidade = () => this.fallback.getTabelaPublicidade();
-  buscarImoveis: PortalRepository["buscarImoveis"] = async (portalId, f) => this.fallback.buscarImoveis(await this.idNoFallback(portalId), f);
-  getImovel: PortalRepository["getImovel"] = async (portalId, s, o) => this.fallback.getImovel(await this.idNoFallback(portalId), s, o);
-  listImoveisPorIds: PortalRepository["listImoveisPorIds"] = async (portalId, ids) => this.fallback.listImoveisPorIds(await this.idNoFallback(portalId), ids);
-  listAnunciantes: PortalRepository["listAnunciantes"] = async (portalId) => this.fallback.listAnunciantes(await this.idNoFallback(portalId));
-  getAnunciantePublico: PortalRepository["getAnunciantePublico"] = async (portalId, s) => this.fallback.getAnunciantePublico(await this.idNoFallback(portalId), s);
   listPosts = (p: number, pp?: number) => this.fallback.listPosts(p, pp);
   getPost = (s: string) => this.fallback.getPost(s);
   listDicas = () => this.fallback.listDicas();
-  registrarClique: PortalRepository["registrarClique"] = (i) => this.fallback.registrarClique(i);
   enviarContato: PortalRepository["enviarContato"] = async (portalId, p) => this.fallback.enviarContato(await this.idNoFallback(portalId), p);
-  contatarAnunciante: PortalRepository["contatarAnunciante"] = async (portalId, p) => this.fallback.contatarAnunciante(await this.idNoFallback(portalId), p);
   enviarEncomenda: PortalRepository["enviarEncomenda"] = async (portalId, p) => this.fallback.enviarEncomenda(await this.idNoFallback(portalId), p);
   enviarLeadSite: PortalRepository["enviarLeadSite"] = async (portalId, p) => this.fallback.enviarLeadSite(await this.idNoFallback(portalId), p);
   login: PortalRepository["login"] = (e, s) => this.fallback.login(e, s);

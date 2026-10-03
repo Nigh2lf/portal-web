@@ -4,7 +4,21 @@
  */
 
 import { OBJETIVOS, linkBusca } from "@/lib/busca/filtros";
-import type { Bairro, Cidade, ImovelResumo, ImovelTipo, Infraestrutura, Objetivo, PesquisaPopular, Portal, Publicidade } from "./types";
+import type {
+  AnuncianteResumo,
+  Bairro,
+  BuscaFiltros,
+  Cidade,
+  Imovel,
+  ImovelResumo,
+  ImovelTipo,
+  Infraestrutura,
+  Objetivo,
+  PesquisaPopular,
+  Portal,
+  Publicidade,
+  TipoAnunciante,
+} from "./types";
 
 export interface ApiCity {
   id: string;
@@ -255,4 +269,183 @@ export function mapPublicidade(a: ApiAd, portalId: string): Publicidade {
     fim: a.ends_at,
     ativo: true,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Busca, detalhe, anunciantes
+// ---------------------------------------------------------------------------
+
+export interface ApiRef {
+  name: string;
+  slug: string;
+  state_code?: string;
+  id?: string;
+}
+export interface ApiSearchResult {
+  results: ApiPropertyCard[];
+  count: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  counters: { sale: number; rent: number; seasonal: number };
+  max_price: string | number;
+  applied: { property_type: ApiRef | null; city: ApiRef | null; neighborhood: ApiRef | null };
+}
+export interface ApiAdvertiser {
+  id: string;
+  slug: string;
+  type: "OWNER" | "BROKER" | "AGENCY";
+  name: string;
+  creci: string;
+  logo_url: string | null;
+  phone: string;
+  phone_secondary: string;
+  whatsapp: string;
+  email: string;
+  website: string;
+  address: string;
+  has_hotsite: boolean;
+  hotsite_slug: string | null;
+  total_properties: number;
+  total_sale: number;
+  total_rent: number;
+  total_seasonal: number;
+}
+export interface ApiPropertyDetail {
+  id: string;
+  reference_code: string;
+  slug: string;
+  title: string;
+  is_featured: boolean;
+  property_type: { id: string; name: string; slug: string };
+  city: { id: string; name: string; slug: string; state_code: string };
+  neighborhood: { id: string; name: string; slug: string } | null;
+  neighborhood_name: string | null;
+  state_code: string;
+  is_in_condominium: boolean;
+  bedrooms: number;
+  suites: number;
+  bathrooms: number;
+  parking_spaces: number;
+  built_area: string | number | null;
+  total_area: string | number | null;
+  description: string;
+  features: string[];
+  condominium_features: string[];
+  fees: Array<{ description: string; amount: string | number; period: string; notes: string }>;
+  sale_price: string | number | null;
+  rent_price: string | number | null;
+  seasonal_rent_price: string | number | null;
+  photos: Array<{ id: string; url: string | null; thumbnail_url: string | null; sort_order: number; is_cover: boolean }>;
+  advertiser: ApiAdvertiser;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+export interface ApiRelatedLink {
+  purpose: "SALE" | "RENT" | "SEASONAL";
+  property_type: ApiRef;
+  city: ApiRef;
+  neighborhood: ApiRef | null;
+}
+
+const TYPE_TO_TIPO: Record<ApiAdvertiser["type"], TipoAnunciante> = { OWNER: "proprietario", BROKER: "corretor", AGENCY: "imobiliaria" };
+const PERIOD_LABEL: Record<string, string> = { MONTHLY: "mensal", YEARLY: "anual", ONE_TIME: "única" };
+
+export function mapAnuncianteResumo(a: ApiAdvertiser): AnuncianteResumo {
+  return {
+    id: a.id,
+    slug: a.slug,
+    tipo: TYPE_TO_TIPO[a.type] ?? "imobiliaria",
+    nome: a.name,
+    logo_url: a.logo_url,
+    creci: a.creci || null,
+    telefone: a.phone,
+    telefone2: a.phone_secondary || null,
+    whatsapp: a.whatsapp || null,
+    endereco: a.address || null,
+    email: a.email,
+    site: a.website || null,
+    hotsite: a.has_hotsite,
+    total_imoveis: a.total_properties,
+    totais_por_objetivo: { comprar: a.total_sale, alugar: a.total_rent, temporada: a.total_seasonal },
+  };
+}
+
+export function mapImovel(p: ApiPropertyDetail, portalId: string): Imovel {
+  const fotos = [...p.photos]
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((f) => ({ id: f.id, url: f.url ?? f.thumbnail_url ?? "", mini_url: f.thumbnail_url ?? f.url ?? "", ordem: f.sort_order, principal: f.is_cover }));
+  const capa = fotos.find((f) => f.principal) ?? fotos[0];
+  return {
+    id: p.id,
+    codigo: p.reference_code,
+    slug: p.slug,
+    titulo: p.title,
+    anunciante_id: p.advertiser.id,
+    portal_id: portalId,
+    ativo: true,
+    destaque: p.is_featured,
+    status: "publicado",
+    tipo_id: p.property_type.id,
+    tipo_nome: p.property_type.name,
+    cidade_id: p.city.id,
+    cidade_nome: p.city.name,
+    bairro_id: p.neighborhood?.id ?? "",
+    bairro_nome: p.neighborhood?.name ?? p.neighborhood_name ?? "",
+    uf: p.state_code,
+    quartos: p.bedrooms,
+    suites: p.suites,
+    banheiros: p.bathrooms,
+    vagas: p.parking_spaces,
+    area_construida: numero(p.built_area),
+    area_total: numero(p.total_area),
+    descricao: p.description,
+    infraestrutura: p.features,
+    infra_condominio: p.condominium_features,
+    dentro_condominio: p.is_in_condominium,
+    taxas: p.fees.map((f) => ({ descricao: f.description, valor: numero(f.amount) ?? 0, observacao: [PERIOD_LABEL[f.period], f.notes].filter(Boolean).join(" · ") || null })),
+    preco_venda: numero(p.sale_price),
+    preco_locacao: numero(p.rent_price),
+    preco_temporada: numero(p.seasonal_rent_price),
+    fotos,
+    foto_principal_url: capa?.mini_url ?? null,
+    visualizacoes: 0,
+    criado_em: p.created_at,
+    atualizado_em: p.updated_at,
+  };
+}
+
+export function mapLinkRelacionado(l: ApiRelatedLink): PesquisaPopular {
+  const objetivo = PURPOSE_TO_OBJETIVO[l.purpose] ?? "comprar";
+  const obj = OBJETIVOS.find((o) => o.valor === objetivo)!;
+  const local = l.neighborhood ? l.neighborhood.name : l.city.name;
+  return {
+    label: `${obj.label} ${l.property_type.name} em ${local}`,
+    href: linkBusca({ objetivo, tipo: l.property_type.slug, cidade: l.city.slug, bairro: l.neighborhood?.slug }),
+    total: 0,
+  };
+}
+
+const OBJETIVO_TO_PURPOSE: Record<Objetivo, "SALE" | "RENT" | "SEASONAL"> = { comprar: "SALE", alugar: "RENT", temporada: "SEASONAL" };
+const ORDENACAO_TO_ORDERING: Record<string, string> = { recentes: "recent", menor_preco: "price_asc", maior_preco: "price_desc" };
+
+export function filtrosParaApi(f: BuscaFiltros, anuncianteSlug?: string) {
+  const q = new URLSearchParams();
+  q.set("purpose", OBJETIVO_TO_PURPOSE[f.objetivo]);
+  if (f.tipo) q.set("property_type", f.tipo);
+  if (f.cidade) q.set("city", f.cidade);
+  if (f.bairro) q.set("neighborhood", f.bairro);
+  if (f.condominio) q.set("condominium", f.condominio === "dentro" ? "inside" : "outside");
+  if (f.quartos?.length) q.set("bedrooms", f.quartos.join(","));
+  if (f.vagas) q.set("parking", String(f.vagas));
+  if (f.valor_min) q.set("price_min", String(f.valor_min));
+  if (f.valor_max) q.set("price_max", String(f.valor_max));
+  if (f.codigo) q.set("code", f.codigo);
+  const anunciante = anuncianteSlug ?? f.anunciante;
+  if (anunciante) q.set("advertiser", anunciante);
+  q.set("ordering", ORDENACAO_TO_ORDERING[f.ordenacao] ?? "recent");
+  q.set("page", String(f.pagina));
+  q.set("page_size", String(f.por_pagina));
+  return q.toString();
 }
