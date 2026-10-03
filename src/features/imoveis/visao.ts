@@ -1,10 +1,9 @@
 import "server-only";
 
 import { cookies } from "next/headers";
+import { VISAO_COOKIE, VISAO_PADRAO, type VisaoImoveis } from "./visao-config";
 
-export type VisaoImoveis = "grade" | "lista";
-export const VISAO_COOKIE = "visao_imoveis";
-export const VISAO_PADRAO: VisaoImoveis = "grade";
+export { VISAO_COOKIE, VISAO_PADRAO, type VisaoImoveis } from "./visao-config";
 
 /** Preferência do visitante para a listagem de imóveis: grade (padrão) ou um por linha. */
 export async function lerVisao(): Promise<VisaoImoveis> {
