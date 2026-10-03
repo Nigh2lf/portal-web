@@ -16,7 +16,7 @@ export function montarMetadata(portal: Portal, o: Opcoes = {}): Metadata {
   const titulo = o.titulo ? `${o.titulo} | ${portal.nome}` : portal.titulo_padrao;
   const descricao = o.descricao ?? portal.descricao_padrao;
   const url = urlAbsoluta(portal, o.path ?? "/");
-  const imagem = o.imagem ?? urlAbsoluta(portal, portal.logo_url);
+  const imagem = o.imagem ?? urlAbsoluta(portal, portal.og_image_url);
   return {
     title: titulo,
     description: descricao,

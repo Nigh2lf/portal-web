@@ -17,7 +17,14 @@ export function Header({ portal, sessao }: Props) {
     <header className="sticky top-0 z-40 border-b bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
       <Container className="flex h-16 items-center gap-4 lg:h-[72px]">
         <Link href="/" className="flex shrink-0 items-center" aria-label={portal.nome}>
-          <Image src={portal.logo_url} alt={portal.nome} width={220} height={44} priority className="h-10 w-auto lg:h-11" />
+          <Image
+            src={portal.logo_url}
+            alt={portal.nome}
+            width={portal.logo_largura}
+            height={portal.logo_altura}
+            priority
+            className="h-10 w-auto lg:h-12"
+          />
         </Link>
 
         <nav className="ml-6 hidden flex-1 items-center gap-1 lg:flex" aria-label="Principal">

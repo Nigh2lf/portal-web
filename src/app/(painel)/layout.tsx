@@ -34,7 +34,7 @@ export default async function PainelLayout({ children }: { children: React.React
         <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r bg-card lg:flex">
           <div className="flex h-16 items-center border-b px-5">
             <Link href="/" className="flex items-center" aria-label={`${portal.nome} — ir para o site`}>
-              <Image src={portal.logo_url} alt={portal.nome} width={200} height={40} priority className="h-9 w-auto" />
+              <Image src={portal.logo_url} alt={portal.nome} width={portal.logo_largura} height={portal.logo_altura} priority className="h-9 w-auto" />
             </Link>
           </div>
           <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
@@ -59,7 +59,7 @@ export default async function PainelLayout({ children }: { children: React.React
           <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-background/85 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:px-6">
             <MobileNav itens={itens} portalNome={portal.nome} aviso={sessao.carga_automatica ? <AvisoXml /> : undefined} />
             <Link href="/" className="flex items-center lg:hidden" aria-label={`${portal.nome} — ir para o site`}>
-              <Image src={portal.logo_url} alt={portal.nome} width={160} height={32} className="h-8 w-auto" />
+              <Image src={portal.logo_url} alt={portal.nome} width={portal.logo_largura} height={portal.logo_altura} className="h-8 w-auto" />
             </Link>
             <div className="ml-auto flex items-center gap-2">
               <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex">

@@ -116,10 +116,14 @@
 }
 
 /* Identidade por portal (logo e cor variam; componentes são os mesmos). */
+/* Petrópolis: cores extraídas do logo (azul-marinho do texto, azul da casa, verde do telhado, azul-claro do swoosh). */
 [data-portal="petropolis"] {
-  --brand: oklch(0.34 0.08 235);
-  --brand-soft: oklch(0.95 0.02 235);
-  --cta: oklch(0.62 0.17 155);
+  --brand: #204860;
+  --brand-soft: color-mix(in oklch, #0078a8 10%, white);
+  --cta: #88a848;
+  --highlight: #48c8f0;
+  --ring: #0078a8;
+  --chart-2: #0078a8;
 }
 [data-portal="teresopolis"] {
   --brand: oklch(0.38 0.1 160);

@@ -39,6 +39,13 @@ export interface Portal {
   ga4_id: string | null;
   recaptcha_site_key: string | null;
   logo_url: string;
+  /** Dimensões intrínsecas do arquivo do logo (px), para o next/image manter a proporção. */
+  logo_largura: number;
+  logo_altura: number;
+  /** Imagem 1200x630 (PNG/JPG) para Open Graph; SVG não é aceito pelas redes. */
+  og_image_url: string;
+  /** Ícones por portal; null usa os padrões do app. */
+  icones: { favicon: string; icon_192: string; icon_512: string; apple: string } | null;
   slug_imobiliarias: string;
   menu: MenuItem[];
   cor_primaria: string;
