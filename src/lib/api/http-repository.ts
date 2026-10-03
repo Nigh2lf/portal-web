@@ -1,4 +1,5 @@
 import type { FiltrosMeusImoveis, ImovelDetalhe, PortalRepository } from "./repository";
+import { REVALIDATE_PADRAO, TAGS_HOSTS, tagsCache } from "./cache-tags";
 import type {
   Anunciante,
   Bairro,
@@ -124,8 +125,6 @@ interface Catalogo {
   features: ApiFeature[];
 }
 
-const REVALIDATE_PORTAL = 300;
-const REVALIDATE_HOME = 120;
 
 /**
  * Repositório HTTP contra a API Django: site público (`/public/...`), sessão
@@ -145,8 +144,12 @@ export class HttpRepository implements PortalRepository {
   }
 
   // ------------------------------------------------------------- transporte
-  protected async request<T>(path: string, init: RequestInit & { token?: string; revalidate?: number } = {}): Promise<T> {
-    const { token, revalidate, ...rest } = init;
+  /**
+   * `tags`: leitura pública guardada no cache do Next e invalidada pela API por tag.
+   * Sem `tags`, a chamada nunca é cacheada (sessão, painel, busca e detalhe com contagem).
+   */
+  protected async request<T>(path: string, init: RequestInit & { token?: string; tags?: string[]; revalidate?: number } = {}): Promise<T> {
+    const { token, tags, revalidate, ...rest } = init;
     const headers = new Headers(rest.headers);
     headers.set("Accept", "application/json");
     if (rest.body && !(rest.body instanceof FormData)) headers.set("Content-Type", "application/json");
@@ -154,8 +157,8 @@ export class HttpRepository implements PortalRepository {
     const res = await fetch(`${this.baseUrl}${path}`, {
       ...rest,
       headers,
-      next: revalidate !== undefined ? { revalidate } : undefined,
-      cache: revalidate === undefined ? "no-store" : undefined,
+      next: tags ? { tags, revalidate: revalidate ?? REVALIDATE_PADRAO } : undefined,
+      cache: tags ? undefined : "no-store",
     });
     // DELETE responde 204 sem corpo.
     if (res.status === 204) return undefined as T;
@@ -216,7 +219,7 @@ export class HttpRepository implements PortalRepository {
   private catalogo(slug: string) {
     let p = this.catalogoPorSlug.get(slug);
     if (!p) {
-      p = this.request<Catalogo>(`/public/portals/${slug}/catalog/`, { revalidate: REVALIDATE_HOME });
+      p = this.request<Catalogo>(`/public/portals/${slug}/catalog/`, { tags: tagsCache("catalog", slug) });
       this.catalogoPorSlug.set(slug, p);
       p.catch(() => this.catalogoPorSlug.delete(slug));
     }
@@ -226,7 +229,7 @@ export class HttpRepository implements PortalRepository {
   // ----------------------------------------------------------------- portal
   async getPortalByHost(host: string) {
     try {
-      const p = await this.request<ApiPortal>(`/public/portals/by-host/?host=${encodeURIComponent(host)}`, { revalidate: REVALIDATE_PORTAL });
+      const p = await this.request<ApiPortal>(`/public/portals/by-host/?host=${encodeURIComponent(host)}`, { tags: TAGS_HOSTS });
       return this.lembrar(mapPortal(p));
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) return null;
@@ -236,7 +239,7 @@ export class HttpRepository implements PortalRepository {
 
   async getPortalBySlug(slug: string) {
     try {
-      const p = await this.request<ApiPortal>(`/public/portals/${slug}/`, { revalidate: REVALIDATE_PORTAL });
+      const p = await this.request<ApiPortal>(`/public/portals/${slug}/`, { tags: tagsCache("portal", slug) });
       return this.lembrar(mapPortal(p));
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) return null;
@@ -245,7 +248,7 @@ export class HttpRepository implements PortalRepository {
   }
 
   async listPortais() {
-    const lista = await this.request<Array<{ id: string; slug: string; name: string; domain: string }>>("/public/portals/", { revalidate: REVALIDATE_PORTAL });
+    const lista = await this.request<Array<{ id: string; slug: string; name: string; domain: string }>>("/public/portals/", { tags: TAGS_HOSTS });
     const completos = await Promise.all(lista.map((p) => this.portaisPorSlug.get(p.slug) ?? this.getPortalBySlug(p.slug)));
     return completos.filter((p): p is Portal => Boolean(p));
   }
@@ -284,11 +287,11 @@ export class HttpRepository implements PortalRepository {
     const portal = this.portaisPorId.get(portalId) ?? (await this.getPortalBySlug(slug));
     const base = `/public/portals/${slug}`;
     const [destaques, buscas, bairros, banners, anuncios] = await Promise.all([
-      this.request<ApiPropertyCard[]>(`${base}/featured-properties/?limit=12`, { revalidate: REVALIDATE_HOME }),
-      this.request<ApiTopSearch[]>(`${base}/top-searches/?limit=15`, { revalidate: REVALIDATE_HOME }),
-      this.request<ApiTopNeighborhood[]>(`${base}/top-neighborhoods/?limit=15`, { revalidate: REVALIDATE_HOME }),
-      this.request<ApiBanner[]>(`${base}/banners/`, { revalidate: REVALIDATE_HOME }),
-      this.request<ApiAd[]>(`${base}/ads/?page=HOME`, { revalidate: REVALIDATE_HOME }),
+      this.request<ApiPropertyCard[]>(`${base}/featured-properties/?limit=12`, { tags: tagsCache("home", slug) }),
+      this.request<ApiTopSearch[]>(`${base}/top-searches/?limit=15`, { tags: tagsCache("home", slug), revalidate: 900 }),
+      this.request<ApiTopNeighborhood[]>(`${base}/top-neighborhoods/?limit=15`, { tags: tagsCache("home", slug) }),
+      this.request<ApiBanner[]>(`${base}/banners/`, { tags: tagsCache("content", slug) }),
+      this.request<ApiAd[]>(`${base}/ads/?page=HOME`, { tags: tagsCache("content", slug) }),
     ]);
     const cidadeId = portal?.cidade_principal_id ?? "";
     const comImagem = banners.filter((b) => b.home_image_url);
@@ -309,13 +312,13 @@ export class HttpRepository implements PortalRepository {
     const slug = await this.slugDoPortal(portalId);
     const page = categoria === "banner_lista" ? "SEARCH" : categoria === "banner_detalhe" ? "PROPERTY" : "HOME";
     const kind = categoria === "popup_home" ? "POPUP" : "HORIZONTAL";
-    const lista = await this.request<ApiAd[]>(`/public/portals/${slug}/ads/?page=${page}&kind=${kind}`, { revalidate: REVALIDATE_HOME });
+    const lista = await this.request<ApiAd[]>(`/public/portals/${slug}/ads/?page=${page}&kind=${kind}`, { tags: tagsCache("content", slug) });
     return lista.length ? mapPublicidade(lista[0]!, portalId) : null;
   }
 
   async getPesquisasPopulares(portalId: string, limite = 15) {
     const slug = await this.slugDoPortal(portalId);
-    const lista = await this.request<ApiTopSearch[]>(`/public/portals/${slug}/top-searches/?limit=${limite}`, { revalidate: REVALIDATE_HOME });
+    const lista = await this.request<ApiTopSearch[]>(`/public/portals/${slug}/top-searches/?limit=${limite}`, { tags: tagsCache("home", slug), revalidate: 900 });
     return lista.map(mapPesquisaPopular);
   }
 
@@ -388,7 +391,7 @@ export class HttpRepository implements PortalRepository {
   async getAnunciantePublico(portalId: string, anuncianteSlug: string) {
     const slug = await this.slugDoPortal(portalId);
     try {
-      const r = await this.request<ApiAdvertiser>(`/public/portals/${slug}/advertisers/${anuncianteSlug}/`);
+      const r = await this.request<ApiAdvertiser>(`/public/portals/${slug}/advertisers/${anuncianteSlug}/`, { tags: tagsCache("advertiser", slug) });
       return mapAnuncianteResumo(r);
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) return null;
@@ -532,12 +535,12 @@ export class HttpRepository implements PortalRepository {
 
   // ------------------------------------------- planos e tabela de publicidade
   async listPlanos(): Promise<Plano[]> {
-    const lista = await this.request<ApiPlan[]>("/public/plans/", { revalidate: REVALIDATE_HOME });
+    const lista = await this.request<ApiPlan[]>("/public/plans/", { tags: tagsCache("plans") });
     return lista.map(mapPlano);
   }
 
   async getTabelaPublicidade(): Promise<TabelaPublicidade[]> {
-    const lista = await this.request<ApiAdPlacement[]>("/public/ad-placements/", { revalidate: REVALIDATE_HOME });
+    const lista = await this.request<ApiAdPlacement[]>("/public/ad-placements/", { tags: tagsCache("plans") });
     return lista.map(mapTabelaPublicidade);
   }
 
@@ -552,7 +555,7 @@ export class HttpRepository implements PortalRepository {
     const slug = await this.slugPadrao();
     if (!slug) return vazio;
     try {
-      const r = await this.request<ApiPaginado<ApiPostCard>>(`/public/portals/${slug}/posts/?page=${pagina}&page_size=${porPagina}`, { revalidate: REVALIDATE_HOME });
+      const r = await this.request<ApiPaginado<ApiPostCard>>(`/public/portals/${slug}/posts/?page=${pagina}&page_size=${porPagina}`, { tags: tagsCache("content", slug) });
       return mapPaginado(r, mapPost);
     } catch (e) {
       // A paginação da API responde 404 para página fora do intervalo.
@@ -565,7 +568,7 @@ export class HttpRepository implements PortalRepository {
     const portal = await this.slugPadrao();
     if (!portal) return null;
     try {
-      const r = await this.request<ApiPostDetail>(`/public/portals/${portal}/posts/${encodeURIComponent(slug)}/`, { revalidate: REVALIDATE_HOME });
+      const r = await this.request<ApiPostDetail>(`/public/portals/${portal}/posts/${encodeURIComponent(slug)}/`, { tags: tagsCache("content", portal) });
       return mapPost(r);
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) return null;
@@ -576,7 +579,7 @@ export class HttpRepository implements PortalRepository {
   async listDicas(): Promise<Dica[]> {
     const slug = await this.slugPadrao();
     if (!slug) return [];
-    const lista = await this.request<ApiTip[]>(`/public/portals/${slug}/tips/`, { revalidate: REVALIDATE_HOME });
+    const lista = await this.request<ApiTip[]>(`/public/portals/${slug}/tips/`, { tags: tagsCache("content", slug) });
     return lista.map(mapDica);
   }
 

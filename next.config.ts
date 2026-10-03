@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Em desenvolvimento, mostra cada fetch da API e se veio do cache (HIT/MISS/SKIP).
+  logging: { fetches: { fullUrl: true } },
   images: {
     // Fotos de imóveis integrados por XML ficam no servidor de cada anunciante,
     // então qualquer host https é aceito; S3 e mocks entram no mesmo padrão.
