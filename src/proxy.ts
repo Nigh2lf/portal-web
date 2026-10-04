@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { PORTAIS, PORTAL_PADRAO_SLUG } from "@/mocks/data/portais";
+import { PORTAL_PADRAO, slugPorHost, slugValido } from "@/lib/tenant/dominios";
 import { REDIRECTS_LEGADO, resolverRedirectLegado } from "@/config/redirects";
 
 export const PORTAL_HEADER = "x-portal-slug";
@@ -9,12 +9,12 @@ const REFRESH_COOKIE = "refresh";
 const MARGEM_RENOVACAO_MS = 120_000;
 const API_BASE_URL = (process.env.API_BASE_URL ?? "http://localhost:8000/api/v1").replace(/\/$/, "");
 
-const slugs = new Set(PORTAIS.map((p) => p.slug));
-
 function expiraEm(token: string | undefined) {
   if (!token) return 0;
   try {
-    const payload = JSON.parse(atob(token.split(".")[1]!.replace(/-/g, "+").replace(/_/g, "/"))) as { exp?: number };
+    const payload = JSON.parse(atob(token.split(".")[1]!.replace(/-/g, "+").replace(/_/g, "/"))) as {
+      exp?: number;
+    };
     return (payload.exp ?? 0) * 1000;
   } catch {
     return 0;
@@ -44,8 +44,21 @@ async function renovarSessao(request: NextRequest, response: NextResponse) {
     }
     const tokens = (await res.json()) as { access: string; refresh?: string };
     const secure = process.env.NODE_ENV === "production";
-    response.cookies.set(ACCESS_COOKIE, tokens.access, { httpOnly: true, sameSite: "lax", secure, path: "/", expires: new Date(expiraEm(tokens.access) || Date.now() + 3_600_000) });
-    if (tokens.refresh) response.cookies.set(REFRESH_COOKIE, tokens.refresh, { httpOnly: true, sameSite: "lax", secure, path: "/", maxAge: 60 * 60 * 24 * 30 });
+    response.cookies.set(ACCESS_COOKIE, tokens.access, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure,
+      path: "/",
+      expires: new Date(expiraEm(tokens.access) || Date.now() + 3_600_000),
+    });
+    if (tokens.refresh)
+      response.cookies.set(REFRESH_COOKIE, tokens.refresh, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure,
+        path: "/",
+        maxAge: 60 * 60 * 24 * 30,
+      });
     response.headers.set("x-access-renewed", "1");
   } catch {
     // API fora do ar: segue sem renovar.
@@ -64,17 +77,19 @@ export async function proxy(request: NextRequest) {
   const legado = resolverRedirectLegado(url.pathname);
   if (legado) return NextResponse.redirect(new URL(legado, url), 301);
 
-  const host = (request.headers.get("host") ?? "").toLowerCase().split(":")[0]!;
-  const porHost = PORTAIS.find((p) => p.dominios.includes(host))?.slug;
+  const porHost = await slugPorHost(request.headers.get("host") ?? "");
   const porQuery = url.searchParams.get("portal");
   const porCookie = request.cookies.get(PORTAL_COOKIE)?.value;
 
-  const slug = porHost ?? (porQuery && slugs.has(porQuery) ? porQuery : porCookie && slugs.has(porCookie) ? porCookie : PORTAL_PADRAO_SLUG);
+  // `?portal=` e o cookie só valem fora dos domínios dos portais (localhost, Railway).
+  // Slug inexistente cai no portal padrão em `getPortal()`.
+  const slug =
+    porHost ?? (slugValido(porQuery) ? porQuery : slugValido(porCookie) ? porCookie : PORTAL_PADRAO);
 
   const headers = new Headers(request.headers);
   headers.set(PORTAL_HEADER, slug);
 
-  if (porQuery && slugs.has(porQuery) && !porHost) {
+  if (slugValido(porQuery) && !porHost) {
     url.searchParams.delete("portal");
     const res = NextResponse.redirect(url);
     res.cookies.set(PORTAL_COOKIE, porQuery, { path: "/", maxAge: 60 * 60 * 24 * 30 });
@@ -85,7 +100,9 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|logos/|portais/|.*\\.(?:svg|png|jpg|jpeg|webp|ico|txt|xml)$).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|logos/|portais/|.*\\.(?:svg|png|jpg|jpeg|webp|ico|txt|xml)$).*)",
+  ],
 };
 
 export { REDIRECTS_LEGADO };
