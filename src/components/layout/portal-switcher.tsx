@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { Globe } from "lucide-react";
+import { iniciarNavegacao } from "@/components/layout/navegacao-progresso";
 
 /**
  * Seletor de portal para desenvolvimento: grava `?portal=` que o proxy
@@ -16,7 +17,10 @@ export function PortalSwitcher({ atual, portais }: { atual: string; portais: Arr
       <span className="sr-only">Trocar portal (dev)</span>
       <select
         value={atual}
-        onChange={(e) => router.push(`/?portal=${e.target.value}`)}
+        onChange={(e) => {
+          iniciarNavegacao();
+          router.push(`/?portal=${e.target.value}`);
+        }}
         className="rounded border border-white/20 bg-transparent px-2 py-1 text-xs text-brand-foreground/80"
       >
         {portais.map((p) => (

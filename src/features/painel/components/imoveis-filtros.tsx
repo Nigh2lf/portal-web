@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { iniciarNavegacao } from "@/components/layout/navegacao-progresso";
 import { Loader2, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,7 @@ export function ImoveisFiltros({ filtros, tipos, cidades }: Props) {
       cidade: filtros.cidade,
       ...mudancas,
     };
+    iniciarNavegacao();
     iniciar(() => router.push(`/painel/imoveis${queryDe(proximo)}`));
   }
 
@@ -131,7 +133,10 @@ export function ImoveisFiltros({ filtros, tipos, cidades }: Props) {
           Filtrar
         </Button>
         {temFiltro && (
-          <Button type="button" variant="ghost" size="icon-sm" className="h-8" aria-label="Limpar filtros" onClick={() => iniciar(() => router.push("/painel/imoveis"))}>
+          <Button type="button" variant="ghost" size="icon-sm" className="h-8" aria-label="Limpar filtros" onClick={() => {
+              iniciarNavegacao();
+              iniciar(() => router.push("/painel/imoveis"));
+            }}>
             <X />
           </Button>
         )}

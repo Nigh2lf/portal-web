@@ -1,10 +1,13 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { Container } from "@/components/layout/container";
+import { BuscaPaginaSkeleton } from "@/features/imoveis/components/busca-skeleton";
 import { ResultadoBusca } from "@/features/imoveis/components/resultado-busca";
 import { buscarImoveis, carregarBusca, resolverIdsLegado } from "@/features/imoveis/server/busca";
 import { getRepository } from "@/lib/api";
+import type { BuscaFiltros, Portal } from "@/lib/api/types";
 import { linkBusca, parseFiltros } from "@/lib/busca/filtros";
 import { lerFavoritos } from "@/lib/favoritos/cookie";
 import { lerVisao } from "@/features/imoveis/visao";
@@ -26,14 +29,28 @@ export async function generateMetadata({ searchParams }: PageProps<"/imoveis">):
   });
 }
 
+/**
+ * A página em si só resolve o portal e os filtros (rápido). A consulta à API fica
+ * em `CorpoBusca`, dentro de um Suspense com `key` dos filtros: assim o skeleton
+ * aparece também quando só a query string muda (abas, ordenação, paginação),
+ * caso em que o `loading.tsx` não é exibido pelo App Router.
+ */
 export default async function BuscaPage({ searchParams }: PageProps<"/imoveis">) {
-  const [sp, portal, repo, favoritos] = await Promise.all([searchParams, getPortal(), getRepository(), lerFavoritos()]);
-  const visao = await lerVisao();
+  const [sp, portal] = await Promise.all([searchParams, getPortal()]);
   const filtros = parseFiltros(sp);
 
   const urlLimpa = await resolverIdsLegado(sp, portal.id, filtros);
   if (urlLimpa) redirect(urlLimpa);
 
+  return (
+    <Suspense key={JSON.stringify(filtros)} fallback={<BuscaPaginaSkeleton />}>
+      <CorpoBusca portal={portal} filtros={filtros} />
+    </Suspense>
+  );
+}
+
+async function CorpoBusca({ portal, filtros }: { portal: Portal; filtros: BuscaFiltros }) {
+  const [repo, favoritos, visao] = await Promise.all([getRepository(), lerFavoritos(), lerVisao()]);
   const [dados, banner] = await Promise.all([carregarBusca(portal, filtros), repo.getPublicidade(portal.id, "banner_lista")]);
   const sugestoes = dados.resultado.total === 0 ? await repo.getPesquisasPopulares(portal.id, 8) : [];
 

@@ -19,7 +19,10 @@ export default function LoadingHotsite() {
           </div>
         </Container>
       </section>
-      <BuscaCorpoSkeleton />
+      <Container className="py-6 sm:py-8">
+        <Skeleton className="mb-5 h-8 w-72 max-w-full" />
+        <BuscaCorpoSkeleton />
+      </Container>
     </div>
   );
 }

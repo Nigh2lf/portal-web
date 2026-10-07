@@ -1,5 +1,7 @@
+import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
+import { NavegacaoProgresso } from "@/components/layout/navegacao-progresso";
 import { Toaster } from "@/components/ui/sonner";
 import { getPortal } from "@/lib/tenant/get-portal";
 import { montarMetadata } from "@/lib/seo/metadata";
@@ -38,6 +40,10 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="pt-BR" data-portal={portal.slug} className={`${inter.variable} ${jakarta.variable} h-full`}>
       <body className="flex min-h-full flex-col">
+        {/* useSearchParams exige Suspense; a barra não tem fallback. */}
+        <Suspense>
+          <NavegacaoProgresso />
+        </Suspense>
         {children}
         <Toaster richColors position="top-center" />
       </body>

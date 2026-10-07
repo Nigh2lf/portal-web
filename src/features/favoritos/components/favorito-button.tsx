@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { iniciarNavegacao } from "@/components/layout/navegacao-progresso";
 import { Heart, Trash } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -44,7 +45,10 @@ export function FavoritoButton({ imovelId, inicial, variante = "icone", classNam
       }
       if (r.dados.favorito) {
         toast.success("Imóvel salvo nos favoritos.", {
-          action: { label: "Ver favoritos", onClick: () => router.push("/favoritos") },
+          action: { label: "Ver favoritos", onClick: () => {
+              iniciarNavegacao();
+              router.push("/favoritos");
+            } },
         });
       } else {
         toast(r.mensagem);

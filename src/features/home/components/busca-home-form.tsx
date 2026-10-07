@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Hash, LoaderCircle, Search } from "lucide-react";
 import type { Bairro, BuscaFiltros, Cidade, ImovelTipo } from "@/lib/api/types";
 import { Button } from "@/components/ui/button";
+import { iniciarNavegacao } from "@/components/layout/navegacao-progresso";
 import {
   CONDOMINIO,
   ChipsQuartos,
@@ -40,6 +41,7 @@ export function BuscaHomeForm({ tipos, cidades, bairrosIniciais, exibirCidade, c
     e.preventDefault();
     const final: Partial<BuscaFiltros> = { ...estado, pagina: 1 };
     if (final.bairros?.length && !final.cidade) final.cidade = cidadePadraoSlug;
+    iniciarNavegacao();
     iniciar(() => router.push(linkBusca(final)));
   }
 

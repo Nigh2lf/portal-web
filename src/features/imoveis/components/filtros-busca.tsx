@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Eraser, Hash, LoaderCircle, Search, SlidersHorizontal } from "lucide-react";
 import type { Bairro, BuscaFiltros, Cidade, ImovelTipo } from "@/lib/api/types";
 import { Button } from "@/components/ui/button";
+import { iniciarNavegacao } from "@/components/layout/navegacao-progresso";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -128,6 +129,7 @@ function FormularioFiltros({
     const final: Partial<BuscaFiltros> = { ...estado, ordenacao: filtros.ordenacao, pagina: 1 };
     // Bairro sem cidade é ambíguo (ex.: "Centro"): fixa a cidade padrão do portal.
     if (final.bairros?.length && !final.cidade) final.cidade = cidadePadraoSlug;
+    iniciarNavegacao();
     iniciar(() => {
       router.push(linkBusca(final, base));
       aoAplicar?.();
@@ -136,6 +138,7 @@ function FormularioFiltros({
 
   function limpar() {
     setEstado(estadoInicial({ objetivo: estado.objetivo }));
+    iniciarNavegacao();
     iniciar(() => {
       router.push(linkBusca({ objetivo: estado.objetivo }, base));
       aoAplicar?.();

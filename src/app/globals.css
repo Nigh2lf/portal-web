@@ -192,3 +192,10 @@
   & a { @apply text-brand underline underline-offset-4; }
   & strong { @apply font-semibold; }
 }
+
+/* Enquanto a barra de navegação está ativa (ver navegacao-progresso.tsx). */
+body[data-navegando],
+body[data-navegando] a,
+body[data-navegando] button {
+  cursor: progress;
+}

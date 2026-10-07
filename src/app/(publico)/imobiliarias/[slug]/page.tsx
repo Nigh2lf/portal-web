@@ -1,10 +1,12 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronRight } from "lucide-react";
-import type { BuscaFiltros } from "@/lib/api/types";
+import type { AnuncianteResumo, BuscaFiltros, Portal } from "@/lib/api/types";
 import { Container } from "@/components/layout/container";
 import { AnuncianteBox } from "@/features/imoveis/components/anunciante-box";
+import { BuscaCorpoSkeleton } from "@/features/imoveis/components/busca-skeleton";
 import { ResultadoBusca } from "@/features/imoveis/components/resultado-busca";
 import { carregarBusca } from "@/features/imoveis/server/busca";
 import { getRepository } from "@/lib/api";
@@ -37,15 +39,12 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 }
 
 export default async function HotsitePage(props: Props) {
-  const [{ slug, sp, portal, repo, anunciante }, favoritos] = await Promise.all([resolver(props), lerFavoritos()]);
-  const visao = await lerVisao();
+  const { slug, sp, portal, anunciante } = await resolver(props);
   if (!anunciante) notFound();
 
   const base = `/imobiliarias/${slug}`;
   // Na UI o anunciante está no caminho; só a chamada ao repositório recebe o filtro.
   const filtrosUI: BuscaFiltros = { ...parseFiltros(sp), anunciante: undefined };
-  const filtrosRepo: BuscaFiltros = { ...filtrosUI, anunciante: slug };
-  const [dados, banner] = await Promise.all([carregarBusca(portal, filtrosRepo, { anuncianteId: anunciante.id }), repo.getPublicidade(portal.id, "banner_lista")]);
 
   const diretorio = `/${portal.slug_imobiliarias}`;
   const rotuloTipo = anunciante.tipo === "imobiliaria" ? "Imobiliária" : anunciante.tipo === "corretor" ? "Corretor" : "Anunciante";
@@ -109,8 +108,19 @@ export default async function HotsitePage(props: Props) {
 
       <Container className="py-6 sm:py-8">
         <h2 className="mb-5 text-2xl font-bold text-brand">Imóveis de {anunciante.nome}</h2>
-        <ResultadoBusca portal={portal} filtros={filtrosUI} dados={dados} favoritos={favoritos} banner={banner} base={base} anuncianteId={anunciante.id} visao={visao} />
+        {/* `key` nos filtros: o skeleton aparece também quando só a query string muda. */}
+        <Suspense key={JSON.stringify(filtrosUI)} fallback={<BuscaCorpoSkeleton />}>
+          <ResultadosHotsite portal={portal} anunciante={anunciante} filtros={filtrosUI} base={base} />
+        </Suspense>
       </Container>
     </>
   );
+}
+
+/** Parte lenta (busca na API), separada para a página responder antes dela. */
+async function ResultadosHotsite({ portal, anunciante, filtros, base }: { portal: Portal; anunciante: AnuncianteResumo; filtros: BuscaFiltros; base: string }) {
+  const [repo, favoritos, visao] = await Promise.all([getRepository(), lerFavoritos(), lerVisao()]);
+  const filtrosRepo: BuscaFiltros = { ...filtros, anunciante: anunciante.slug };
+  const [dados, banner] = await Promise.all([carregarBusca(portal, filtrosRepo, { anuncianteId: anunciante.id }), repo.getPublicidade(portal.id, "banner_lista")]);
+  return <ResultadoBusca portal={portal} filtros={filtros} dados={dados} favoritos={favoritos} banner={banner} base={base} anuncianteId={anunciante.id} visao={visao} />;
 }
