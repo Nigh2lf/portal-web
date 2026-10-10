@@ -9,13 +9,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { cn } from "@/lib/utils";
 import { adicionarFotosAction } from "../actions";
 
-const MAX_BYTES = 5 * 1024 * 1024;
+/** Arquivo escolhido: foto de celular passa de 5 MB, mas é reduzida antes do envio. */
+const MAX_BYTES = 15 * 1024 * 1024;
+/** GIF vai como está (preserva a animação), então vale o limite do que é enviado. */
+const MAX_BYTES_GIF = 5 * 1024 * 1024;
 const TIPOS = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 /** Fotos são reduzidas no navegador antes do envio (legado redimensionava para 800×600). */
 const LARGURA_MAX = 1600;
 const ALTURA_MAX = 1200;
-/** Tamanho aproximado por lote enviado à server action (limite configurado: 20 MB). */
-const LOTE_BYTES = 10 * 1024 * 1024;
+const QUALIDADE_WEBP = 0.82;
+const QUALIDADE_JPEG = 0.86;
+/**
+ * Tamanho por lote enviado à server action, medido no corpo já em base64 (o que trafega).
+ * Fica bem abaixo dos limites do Next (10 MB no buffer do proxy por padrão, 20 MB configurados).
+ */
+const LOTE_BYTES = 6 * 1024 * 1024;
 
 interface Pendente {
   id: string;
@@ -39,20 +47,31 @@ function lerDataUrl(file: Blob): Promise<string> {
   });
 }
 
-async function redimensionar(file: File): Promise<string> {
+/**
+ * Reduz e recodifica a foto no navegador: WebP quando o navegador sabe gerar (bem mais
+ * leve que JPEG na mesma qualidade), JPEG caso contrário. Se a foto já cabia no tamanho
+ * máximo e a versão recodificada não ficou menor, envia o arquivo original.
+ */
+async function otimizar(file: File): Promise<string> {
   if (file.type === "image/gif") return lerDataUrl(file); // preserva animação
   try {
     const bitmap = await createImageBitmap(file);
     const escala = Math.min(1, LARGURA_MAX / bitmap.width, ALTURA_MAX / bitmap.height);
-    if (escala === 1 && file.size < 1.5 * 1024 * 1024) return lerDataUrl(file);
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(bitmap.width * escala);
     canvas.height = Math.round(bitmap.height * escala);
     const ctx = canvas.getContext("2d");
     if (!ctx) return lerDataUrl(file);
+    // Fundo branco: PNG com transparência viraria preto no JPEG.
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     bitmap.close();
-    return canvas.toDataURL("image/jpeg", 0.86);
+    let saida = canvas.toDataURL("image/webp", QUALIDADE_WEBP);
+    // Navegador sem encoder WebP devolve PNG em silêncio.
+    if (!saida.startsWith("data:image/webp")) saida = canvas.toDataURL("image/jpeg", QUALIDADE_JPEG);
+    if (escala === 1 && saida.length * 0.75 >= file.size) return lerDataUrl(file);
+    return saida;
   } catch {
     return lerDataUrl(file);
   }
@@ -81,7 +100,8 @@ export function FotosUploader({ imovelId, totalAtual, limite }: Props) {
       if (pendentes.some((p) => p.id === id)) continue;
       let erro: string | undefined;
       if (!TIPOS.includes(file.type)) erro = "Formato não suportado (use JPG, PNG, GIF ou WebP).";
-      else if (file.size > MAX_BYTES) erro = "Arquivo maior que 5 MB.";
+      else if (file.type === "image/gif" && file.size > MAX_BYTES_GIF) erro = "GIF maior que 5 MB.";
+      else if (file.size > MAX_BYTES) erro = "Arquivo maior que 15 MB.";
       else if (vagas <= 0) erro = "Excede o limite de fotos do plano.";
       else vagas -= 1;
       novos.push({ id, file, preview: URL.createObjectURL(file), erro });
@@ -108,15 +128,16 @@ export function FotosUploader({ imovelId, totalAtual, limite }: Props) {
     if (validas.length === 0) return;
     setEnviando(true);
     setProgresso({ feito: 0, total: validas.length });
+    let enviadas = 0;
     try {
       const urls: string[] = [];
-      for (const p of validas) urls.push(await redimensionar(p.file));
+      for (const p of validas) urls.push(await otimizar(p.file));
 
       // Envia em lotes para respeitar o limite de corpo da server action.
       const lotes: string[][] = [[]];
       let acumulado = 0;
       for (const u of urls) {
-        const tam = u.length * 0.75;
+        const tam = u.length;
         if (acumulado + tam > LOTE_BYTES && lotes[lotes.length - 1]!.length > 0) {
           lotes.push([]);
           acumulado = 0;
@@ -125,7 +146,6 @@ export function FotosUploader({ imovelId, totalAtual, limite }: Props) {
         acumulado += tam;
       }
 
-      let enviadas = 0;
       for (const lote of lotes) {
         const r = await adicionarFotosAction(imovelId, lote);
         if (!r.ok) {
@@ -141,7 +161,14 @@ export function FotosUploader({ imovelId, totalAtual, limite }: Props) {
         router.refresh();
       }
     } catch {
-      toast.error("Não foi possível processar as imagens.");
+      if (enviadas > 0) {
+        // Um lote anterior já foi gravado: mostra o que entrou em vez de parecer que nada foi enviado.
+        toast.error(`Só ${enviadas} de ${validas.length} fotos foram enviadas. Tente enviar as demais de novo.`);
+        limpar();
+        router.refresh();
+      } else {
+        toast.error("Não foi possível enviar as imagens. Tente enviar menos fotos por vez.");
+      }
     } finally {
       setEnviando(false);
       setProgresso(null);
@@ -153,7 +180,7 @@ export function FotosUploader({ imovelId, totalAtual, limite }: Props) {
       <CardHeader>
         <CardTitle>Adicionar fotos</CardTitle>
         <CardDescription>
-          JPG, PNG, GIF ou WebP de até 5 MB cada. Tamanho recomendado <strong>730×550</strong> (proporção 4:3). Você pode enviar várias de uma vez.{" "}
+          JPG, PNG ou WebP de até 15 MB cada (GIF até 5 MB). As fotos são reduzidas e otimizadas antes do envio. Proporção recomendada <strong>4:3</strong>. Você pode enviar várias de uma vez.{" "}
           {limiteCheio ? <span className="text-destructive">Limite de {limite} fotos atingido: remova alguma para enviar novas.</span> : <>Restam <strong>{restantes - validas.length}</strong> de {limite} vagas.</>}
         </CardDescription>
       </CardHeader>

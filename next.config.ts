@@ -14,6 +14,9 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     serverActions: { bodySizeLimit: "20mb" },
+    // Com `proxy.ts`, o corpo passa antes por um buffer que corta em 10 MB por padrão;
+    // sem igualar ao limite da server action, o envio de fotos chegava truncado.
+    proxyClientMaxBodySize: "20mb",
   },
 };
 
