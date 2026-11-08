@@ -6,11 +6,16 @@ const nextConfig: NextConfig = {
   logging: { fetches: { fullUrl: true } },
   images: {
     // Fotos de imóveis integrados por XML ficam no servidor de cada anunciante,
-    // então qualquer host https é aceito; S3 e mocks entram no mesmo padrão.
+    // então qualquer host é aceito; S3 e mocks entram no mesmo padrão. Muitos feeds
+    // ainda mandam `http://` (às vezes com redirecionamento para https, que o
+    // otimizador segue): o navegador recebe a imagem pelo nosso domínio em https.
     remotePatterns: [
       { protocol: "https", hostname: "**" },
-      { protocol: "http", hostname: "localhost" },
+      { protocol: "http", hostname: "**" },
     ],
+    // As versões otimizadas ficam em `.next/cache/images`; sem limite o disco do
+    // servidor (16 GB, compartilhado) enche. As mais antigas saem primeiro.
+    maximumDiskCacheSize: 2_000_000_000,
   },
   experimental: {
     serverActions: { bodySizeLimit: "20mb" },
