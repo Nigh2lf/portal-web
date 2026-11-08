@@ -17,9 +17,10 @@ interface Props {
 export function EstadoVazio({ filtros, contadores, sugestoes = [], base = "/imoveis", titulo = "Nenhum imóvel encontrado", descricao }: Props) {
   const alternativas: Array<{ label: string; href: string }> = [];
   if (filtros.bairros?.length) alternativas.push({ label: "Buscar em toda a cidade", href: linkBusca({ ...filtros, bairros: undefined, pagina: 1 }, base) });
-  if (filtros.tipo) alternativas.push({ label: "Todos os tipos de imóvel", href: linkBusca({ ...filtros, tipo: undefined, pagina: 1 }, base) });
+  if (filtros.tipos?.length) alternativas.push({ label: "Todos os tipos de imóvel", href: linkBusca({ ...filtros, tipos: undefined, pagina: 1 }, base) });
   if (filtros.valor_min || filtros.valor_max) alternativas.push({ label: "Qualquer faixa de preço", href: linkBusca({ ...filtros, valor_min: undefined, valor_max: undefined, pagina: 1 }, base) });
-  if (filtros.quartos?.length || filtros.vagas || filtros.condominio) {
+  if (filtros.area_min || filtros.area_max) alternativas.push({ label: "Qualquer área", href: linkBusca({ ...filtros, area_min: undefined, area_max: undefined, pagina: 1 }, base) });
+  if (filtros.quartos?.length || filtros.vagas?.length || filtros.condominio) {
     alternativas.push({ label: "Sem filtros de quartos, vagas e condomínio", href: linkBusca({ ...filtros, quartos: undefined, vagas: undefined, condominio: undefined, pagina: 1 }, base) });
   }
   if (filtros.codigo) alternativas.push({ label: "Ignorar o código", href: linkBusca({ ...filtros, codigo: undefined, pagina: 1 }, base) });

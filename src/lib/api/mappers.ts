@@ -263,7 +263,7 @@ export function mapPesquisaPopular(t: ApiTopSearch): PesquisaPopular {
   const obj = OBJETIVOS.find((o) => o.valor === objetivo)!;
   return {
     label: `${t.property_type.name} ${obj.labelTitulo} em ${t.neighborhood.name}, ${t.city.name} - ${t.city.state_code}`,
-    href: linkBusca({ objetivo, tipo: t.property_type.slug, cidade: t.city.slug, bairros: [t.neighborhood.slug] }),
+    href: linkBusca({ objetivo, tipos: [t.property_type.slug], cidade: t.city.slug, bairros: [t.neighborhood.slug] }),
     total: t.total,
   };
 }
@@ -311,7 +311,7 @@ export interface ApiSearchResult {
   total_pages: number;
   counters: { sale: number; rent: number; seasonal: number };
   max_price: string | number;
-  applied: { property_type: ApiRef | null; city: ApiRef | null; neighborhood: ApiRef | null; neighborhoods?: ApiRef[] };
+  applied: { property_type: ApiRef | null; property_types?: ApiRef[]; city: ApiRef | null; neighborhood: ApiRef | null; neighborhoods?: ApiRef[] };
 }
 export interface ApiAdvertiser {
   id: string;
@@ -451,7 +451,7 @@ export function mapLinkRelacionado(l: ApiRelatedLink): PesquisaPopular {
   const local = l.neighborhood ? l.neighborhood.name : l.city.name;
   return {
     label: `${obj.label} ${l.property_type.name} em ${local}`,
-    href: linkBusca({ objetivo, tipo: l.property_type.slug, cidade: l.city.slug, bairros: l.neighborhood ? [l.neighborhood.slug] : undefined }),
+    href: linkBusca({ objetivo, tipos: [l.property_type.slug], cidade: l.city.slug, bairros: l.neighborhood ? [l.neighborhood.slug] : undefined }),
     total: 0,
   };
 }
@@ -462,14 +462,16 @@ const ORDENACAO_TO_ORDERING: Record<string, string> = { recentes: "recent", meno
 export function filtrosParaApi(f: BuscaFiltros, anuncianteSlug?: string) {
   const q = new URLSearchParams();
   q.set("purpose", OBJETIVO_TO_PURPOSE[f.objetivo]);
-  if (f.tipo) q.set("property_type", f.tipo);
+  if (f.tipos?.length) q.set("property_type", f.tipos.join(","));
   if (f.cidade) q.set("city", f.cidade);
   if (f.bairros?.length) q.set("neighborhood", f.bairros.join(","));
   if (f.condominio) q.set("condominium", f.condominio === "dentro" ? "inside" : "outside");
   if (f.quartos?.length) q.set("bedrooms", f.quartos.join(","));
-  if (f.vagas) q.set("parking", String(f.vagas));
+  if (f.vagas?.length) q.set("parking", f.vagas.join(","));
   if (f.valor_min) q.set("price_min", String(f.valor_min));
   if (f.valor_max) q.set("price_max", String(f.valor_max));
+  if (f.area_min) q.set("area_min", String(f.area_min));
+  if (f.area_max) q.set("area_max", String(f.area_max));
   if (f.codigo) q.set("code", f.codigo);
   const anunciante = anuncianteSlug ?? f.anunciante;
   if (anunciante) q.set("advertiser", anunciante);

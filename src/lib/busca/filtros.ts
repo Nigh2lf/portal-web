@@ -35,25 +35,35 @@ function numero(v: string | undefined) {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
+/** `?quartos=1,2,6` → [1, 2, 4]: acima de 4 vira "4+" (links antigos com `vagas=6`). */
+function contagens(v: string | string[] | undefined) {
+  const valores = (Array.isArray(v) ? v : v ? v.split(",") : [])
+    .map(Number)
+    .filter((n) => Number.isInteger(n) && n >= 1)
+    .map((n) => Math.min(n, 4));
+  return [...new Set(valores)].sort();
+}
+
 /** Converte `searchParams` (e segmentos de rota) nos filtros tipados da busca. */
 export function parseFiltros(sp: SearchParamsLike, segmentos: Partial<BuscaFiltros> = {}): BuscaFiltros {
   const objetivo = (um(sp.objetivo) as Objetivo) || segmentos.objetivo || "comprar";
-  const quartosRaw = sp.quartos;
-  const quartos = (Array.isArray(quartosRaw) ? quartosRaw : quartosRaw ? quartosRaw.split(",") : [])
-    .map(Number)
-    .filter((n) => n >= 1 && n <= 4);
+  const quartos = contagens(sp.quartos);
+  const vagas = contagens(sp.vagas);
   const condominio = um(sp.condominio);
+  const tipos = lista(sp.tipo);
   const bairros = lista(sp.bairro);
   return {
     objetivo: OBJETIVOS.some((o) => o.valor === objetivo) ? objetivo : "comprar",
-    tipo: um(sp.tipo) || segmentos.tipo,
+    tipos: tipos.length ? tipos : segmentos.tipos,
     cidade: um(sp.cidade) || segmentos.cidade,
     bairros: bairros.length ? bairros : segmentos.bairros,
     condominio: condominio === "dentro" || condominio === "fora" ? condominio : undefined,
     quartos: quartos.length ? quartos : undefined,
-    vagas: numero(um(sp.vagas)),
+    vagas: vagas.length ? vagas : undefined,
     valor_min: numero(um(sp.valor_min)),
     valor_max: numero(um(sp.valor_max)),
+    area_min: numero(um(sp.area_min)),
+    area_max: numero(um(sp.area_max)),
     codigo: um(sp.codigo)?.trim() || undefined,
     anunciante: um(sp.anunciante) || segmentos.anunciante,
     ordenacao: (ORDENACOES.some((o) => o.valor === um(sp.ordenacao))
@@ -68,14 +78,16 @@ export function parseFiltros(sp: SearchParamsLike, segmentos: Partial<BuscaFiltr
 export function filtrosParaQuery(f: Partial<BuscaFiltros>): string {
   const q = new URLSearchParams();
   if (f.objetivo && f.objetivo !== "comprar") q.set("objetivo", f.objetivo);
-  if (f.tipo) q.set("tipo", f.tipo);
+  if (f.tipos?.length) q.set("tipo", f.tipos.join(","));
   if (f.cidade) q.set("cidade", f.cidade);
   if (f.bairros?.length) q.set("bairro", f.bairros.join(","));
   if (f.condominio) q.set("condominio", f.condominio);
   if (f.quartos?.length) q.set("quartos", f.quartos.join(","));
-  if (f.vagas) q.set("vagas", String(f.vagas));
+  if (f.vagas?.length) q.set("vagas", f.vagas.join(","));
   if (f.valor_min) q.set("valor_min", String(f.valor_min));
   if (f.valor_max) q.set("valor_max", String(f.valor_max));
+  if (f.area_min) q.set("area_min", String(f.area_min));
+  if (f.area_max) q.set("area_max", String(f.area_max));
   if (f.codigo) q.set("codigo", f.codigo);
   if (f.anunciante) q.set("anunciante", f.anunciante);
   if (f.ordenacao && f.ordenacao !== "recentes") q.set("ordenacao", f.ordenacao);

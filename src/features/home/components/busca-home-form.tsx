@@ -9,9 +9,10 @@ import { Button } from "@/components/ui/button";
 import { iniciarNavegacao } from "@/components/layout/navegacao-progresso";
 import {
   CONDOMINIO,
-  ChipsQuartos,
+  CountChips,
   type EstadoBusca,
   FaixaPreco,
+  PropertyTypeSelect,
   SelectBairros,
   SelectCampo,
   SeletorObjetivo,
@@ -68,14 +69,7 @@ export function BuscaHomeForm({ tipos, cidades, bairrosIniciais, exibirCidade, c
             : "grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
         }
       >
-        <SelectCampo
-          id="h-tipo"
-          label="Tipo de imóvel"
-          valor={estado.tipo}
-          onChange={(v) => set({ tipo: v })}
-          opcoes={tipos.map((t) => ({ valor: t.slug, label: t.nome }))}
-          placeholder="Todos os tipos"
-        />
+        <PropertyTypeSelect id="h-tipo" types={tipos} value={estado.tipos ?? []} onChange={(v) => set({ tipos: v })} />
         {exibirCidade && (
           <SelectCampo
             id="h-cidade"
@@ -103,7 +97,7 @@ export function BuscaHomeForm({ tipos, cidades, bairrosIniciais, exibirCidade, c
           opcoes={CONDOMINIO}
           placeholder="Indiferente"
         />
-        <ChipsQuartos valor={estado.quartos} onChange={(q) => set({ quartos: q })} />
+        <CountChips label="Quartos" value={estado.quartos} onChange={(q) => set({ quartos: q })} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">

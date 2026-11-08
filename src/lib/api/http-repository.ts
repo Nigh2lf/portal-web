@@ -360,7 +360,7 @@ export class HttpRepository implements PortalRepository {
     const portal = this.portaisPorId.get(portalId) ?? (await this.getPortalBySlug(slug));
     const r = await this.request<ApiSearchResult>(`/public/portals/${slug}/properties/?${filtrosParaApi(f)}`);
     const titulo = tituloBusca(f, {
-      tipo: r.applied.property_type?.name,
+      tipos: (r.applied.property_types ?? (r.applied.property_type ? [r.applied.property_type] : [])).map((t) => t.name),
       cidade: r.applied.city?.name,
       bairros: (r.applied.neighborhoods ?? (r.applied.neighborhood ? [r.applied.neighborhood] : [])).map((n) => n.name),
       cidadePadrao: portal?.cidade_principal_nome ?? "",

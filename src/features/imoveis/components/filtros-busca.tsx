@@ -19,13 +19,14 @@ import {
 import { linkBusca } from "@/lib/busca/filtros";
 import { cn } from "@/lib/utils";
 import {
+  AreaRange,
   CONDOMINIO,
-  ChipsQuartos,
+  CountChips,
   type EstadoBusca,
   FaixaPreco,
+  PropertyTypeSelect,
   SelectBairros,
   SelectCampo,
-  SelectVagas,
   SeletorObjetivo,
   estadoInicial,
   totalFiltrosAtivos,
@@ -154,13 +155,12 @@ function FormularioFiltros({
         className="w-full"
       />
 
-      <SelectCampo
+      <PropertyTypeSelect
         id={`${prefixo}-tipo`}
-        label="Tipo de imóvel"
-        valor={estado.tipo}
-        onChange={(v) => set({ tipo: v })}
-        opcoes={tipos.map((t) => ({ valor: t.slug, label: t.nome }))}
-        placeholder="Todos os tipos"
+        types={tipos}
+        value={estado.tipos ?? []}
+        onChange={(v) => set({ tipos: v })}
+        withTags
       />
 
       {exibirCidade && (
@@ -194,9 +194,9 @@ function FormularioFiltros({
         placeholder="Indiferente"
       />
 
-      <ChipsQuartos valor={estado.quartos} onChange={(q) => set({ quartos: q })} />
+      <CountChips label="Quartos" value={estado.quartos} onChange={(q) => set({ quartos: q })} />
 
-      <SelectVagas id={`${prefixo}-vagas`} valor={estado.vagas} onChange={(v) => set({ vagas: v })} />
+      <CountChips label="Vagas de garagem" value={estado.vagas} onChange={(v) => set({ vagas: v })} />
 
       <FaixaPreco
         objetivo={estado.objetivo}
@@ -204,6 +204,13 @@ function FormularioFiltros({
         valorMin={estado.valor_min}
         valorMax={estado.valor_max}
         onChange={(min, max) => set({ valor_min: min, valor_max: max })}
+      />
+
+      <AreaRange
+        id={`${prefixo}-area`}
+        min={estado.area_min}
+        max={estado.area_max}
+        onChange={(min, max) => set({ area_min: min, area_max: max })}
       />
 
       <div className="grid gap-1.5">

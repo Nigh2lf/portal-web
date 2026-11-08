@@ -386,14 +386,16 @@ export interface SessaoUsuario {
 
 export interface BuscaFiltros {
   objetivo: Objetivo;
-  tipo?: string; // slug
+  tipos?: string[]; // slugs (vários tipos, na URL `tipo=a,b`)
   cidade?: string; // slug
   bairros?: string[]; // slugs (vários bairros, na URL separados por vírgula)
   condominio?: "dentro" | "fora";
   quartos?: number[]; // 1,2,3,4 (4 = 4+)
-  vagas?: number;
+  vagas?: number[]; // 1,2,3,4 (4 = 4+), como quartos
   valor_min?: number;
   valor_max?: number;
+  area_min?: number; // m²; área total ou, na falta dela, a construída
+  area_max?: number;
   codigo?: string;
   anunciante?: string; // slug
   ordenacao: Ordenacao;

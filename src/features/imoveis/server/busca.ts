@@ -77,7 +77,10 @@ export async function resolverIdsLegado(
   const [tipos, cidades] = await Promise.all([repo.listTipos(), repo.listCidades(portalId)]);
   const novos: Partial<BuscaFiltros> = { ...filtros, pagina: 1 };
 
-  if (tipoId) novos.tipo = tipos.find((t) => t.id === tipoId)?.slug ?? filtros.tipo;
+  if (tipoId) {
+    const tipo = tipos.find((t) => t.id === tipoId);
+    novos.tipos = tipo ? [tipo.slug] : filtros.tipos;
+  }
   if (cidadeId) novos.cidade = cidades.find((c) => c.id === cidadeId)?.slug ?? filtros.cidade;
   if (bairroId) {
     const bairros = await repo.listBairros({ portalId });

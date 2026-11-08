@@ -33,8 +33,8 @@ export function DetalheImovel({ portal, detalhe, favoritos, preview }: Props) {
   const objetivos = objetivosDisponiveis(imovel);
   const crumbs = [
     { nome: "Imóveis", href: "/imoveis" },
-    { nome: `${imovel.tipo_nome} em ${imovel.cidade_nome}`, href: linkBusca({ objetivo: objetivos[0], tipo: slugify(imovel.tipo_nome), cidade: slugify(imovel.cidade_nome) }) },
-    { nome: imovel.bairro_nome, href: linkBusca({ objetivo: objetivos[0], tipo: slugify(imovel.tipo_nome), cidade: slugify(imovel.cidade_nome), bairros: [slugify(imovel.bairro_nome)] }) },
+    { nome: `${imovel.tipo_nome} em ${imovel.cidade_nome}`, href: linkBusca({ objetivo: objetivos[0], tipos: [slugify(imovel.tipo_nome)], cidade: slugify(imovel.cidade_nome) }) },
+    { nome: imovel.bairro_nome, href: linkBusca({ objetivo: objetivos[0], tipos: [slugify(imovel.tipo_nome)], cidade: slugify(imovel.cidade_nome), bairros: [slugify(imovel.bairro_nome)] }) },
     { nome: imovel.codigo, href: `/imovel/${imovel.slug}` },
   ];
 
@@ -195,7 +195,7 @@ export function DetalheImovel({ portal, detalhe, favoritos, preview }: Props) {
             portal={portal}
             imovelSlug={imovel.slug}
             objetivo={objetivos[0]}
-            verMaisHref={linkBusca({ objetivo: objetivos[0], tipo: slugify(imovel.tipo_nome), cidade: slugify(imovel.cidade_nome) })}
+            verMaisHref={linkBusca({ objetivo: objetivos[0], tipos: [slugify(imovel.tipo_nome)], cidade: slugify(imovel.cidade_nome) })}
             favoritos={favoritos}
           />
         </Suspense>

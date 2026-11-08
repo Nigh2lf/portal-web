@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Check, ChevronDown, LoaderCircle, Search, X } from "lucide-react";
-import type { Bairro, BuscaFiltros, Objetivo } from "@/lib/api/types";
+import type { Bairro, BuscaFiltros, ImovelTipo, Objetivo } from "@/lib/api/types";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +20,7 @@ export const TODOS = "todos";
 export type EstadoBusca = Pick<
   BuscaFiltros,
   | "objetivo"
-  | "tipo"
+  | "tipos"
   | "cidade"
   | "bairros"
   | "condominio"
@@ -28,34 +28,40 @@ export type EstadoBusca = Pick<
   | "vagas"
   | "valor_min"
   | "valor_max"
+  | "area_min"
+  | "area_max"
   | "codigo"
 >;
 
 export function estadoInicial(f: Partial<BuscaFiltros>): EstadoBusca {
   return {
     objetivo: f.objetivo ?? "comprar",
-    tipo: f.tipo,
+    tipos: f.tipos ?? [],
     cidade: f.cidade,
     bairros: f.bairros ?? [],
     condominio: f.condominio,
     quartos: f.quartos ?? [],
-    vagas: f.vagas,
+    vagas: f.vagas ?? [],
     valor_min: f.valor_min,
     valor_max: f.valor_max,
+    area_min: f.area_min,
+    area_max: f.area_max,
     codigo: f.codigo,
   };
 }
 
 export function totalFiltrosAtivos(e: EstadoBusca) {
   return [
-    e.tipo,
+    e.tipos?.length,
     e.cidade,
     e.bairros?.length,
     e.condominio,
     e.quartos?.length,
-    e.vagas,
+    e.vagas?.length,
     e.valor_min,
     e.valor_max,
+    e.area_min,
+    e.area_max,
     e.codigo,
   ].filter(Boolean).length;
 }
@@ -148,6 +154,175 @@ export function SelectCampo({
   );
 }
 
+// ----------------------------------------------------------- seleção múltipla
+
+export interface MultiSelectOption {
+  value: string;
+  label: string;
+  /** Texto discreto à direita (ex.: total de imóveis do bairro). */
+  hint?: string | number;
+}
+
+interface MultiSelectProps {
+  id: string;
+  label: string;
+  options: MultiSelectOption[];
+  value: string[];
+  onChange: (values: string[]) => void;
+  /** Substantivo no singular e no plural para o resumo ("1 bairro", "3 bairros"). */
+  noun: [string, string];
+  placeholder?: string;
+  searchPlaceholder?: string;
+  emptyMessage?: string;
+  loading?: boolean;
+  disabled?: boolean;
+  className?: string;
+  /** Mostra os itens escolhidos como etiquetas removíveis abaixo do campo. */
+  withTags?: boolean;
+}
+
+function normalizeText(s: string) {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+}
+
+/** Seleção de vários itens: lista com caixas de marcação, busca por nome e resumo no gatilho. */
+export function MultiSelect({
+  id,
+  label,
+  options,
+  value,
+  onChange,
+  noun,
+  placeholder = "Todos",
+  searchPlaceholder = "Buscar",
+  emptyMessage = "Nenhum item encontrado.",
+  loading,
+  disabled,
+  className,
+  withTags,
+}: MultiSelectProps) {
+  const [open, setOpen] = useState(false);
+  const [term, setTerm] = useState("");
+  const selected = new Set(value);
+  const labelOf = (v: string) => options.find((o) => o.value === v)?.label ?? v;
+  const visible = term ? options.filter((o) => normalizeText(o.label).includes(normalizeText(term))) : options;
+  const summary = !value.length
+    ? placeholder
+    : value.length === 1
+      ? labelOf(value[0]!)
+      : `${value.length} ${noun[1]}`;
+  const toggle = (v: string, checked: boolean) =>
+    onChange(checked ? [...value, v] : value.filter((x) => x !== v));
+
+  return (
+    <div className={cn("grid gap-1.5", className)}>
+      <Label htmlFor={id}>{label}</Label>
+      <Popover
+        open={open}
+        onOpenChange={(v) => {
+          setOpen(v);
+          if (!v) setTerm("");
+        }}
+      >
+        <PopoverTrigger asChild>
+          <button
+            id={id}
+            type="button"
+            disabled={disabled || loading}
+            aria-haspopup="dialog"
+            aria-expanded={open}
+            className="bg-card focus-visible:border-ring focus-visible:ring-ring/50 flex h-10 w-full items-center justify-between gap-2 rounded-md border px-3 text-left text-sm shadow-xs transition-colors outline-none focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? (
+              <span className="text-muted-foreground flex items-center gap-2">
+                <LoaderCircle className="size-4 animate-spin" aria-hidden /> Carregando...
+              </span>
+            ) : (
+              <span className={cn("truncate", !value.length && "text-muted-foreground")}>{summary}</span>
+            )}
+            <ChevronDown className="text-muted-foreground size-4 shrink-0" aria-hidden />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-64 p-0">
+          {options.length > 8 && (
+            <div className="relative border-b p-2">
+              <Search
+                className="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2"
+                aria-hidden
+              />
+              <Input
+                value={term}
+                onChange={(e) => setTerm(e.target.value)}
+                placeholder={searchPlaceholder}
+                aria-label={searchPlaceholder}
+                className="h-9 pl-8"
+                autoFocus
+              />
+            </div>
+          )}
+          <ul className="max-h-72 overflow-y-auto p-1" aria-label={label}>
+            {visible.map((o) => {
+              const checked = selected.has(o.value);
+              return (
+                <li key={o.value}>
+                  <label className="hover:bg-muted flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm">
+                    <Checkbox checked={checked} onCheckedChange={(v) => toggle(o.value, v === true)} />
+                    <span className="flex-1 truncate">{o.label}</span>
+                    {o.hint !== undefined && (
+                      <span className="text-muted-foreground text-xs tabular-nums">{o.hint}</span>
+                    )}
+                  </label>
+                </li>
+              );
+            })}
+            {!visible.length && (
+              <li className="text-muted-foreground px-2 py-6 text-center text-sm">{emptyMessage}</li>
+            )}
+          </ul>
+          <div className="flex items-center justify-between gap-2 border-t p-2">
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              disabled={!value.length}
+              className="text-muted-foreground hover:text-foreground rounded-md px-2 py-1 text-sm disabled:opacity-50"
+            >
+              Limpar
+            </button>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="bg-brand text-brand-foreground flex items-center gap-1 rounded-md px-3 py-1 text-sm font-medium"
+            >
+              <Check className="size-4" aria-hidden />
+              {value.length ? `Pronto (${value.length})` : "Pronto"}
+            </button>
+          </div>
+        </PopoverContent>
+      </Popover>
+      {withTags && value.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5" aria-label={`${label}: escolhidos`}>
+          {value.map((v) => (
+            <li key={v}>
+              <button
+                type="button"
+                onClick={() => toggle(v, false)}
+                className="bg-brand-soft text-brand hover:bg-brand/15 flex items-center gap-1 rounded-full px-2.5 py-1 text-xs"
+                aria-label={`Remover ${labelOf(v)}`}
+              >
+                {labelOf(v)}
+                <X className="size-3" aria-hidden />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 interface SelectBairrosProps {
   id: string;
   label?: string;
@@ -162,7 +337,7 @@ interface SelectBairrosProps {
   comEtiquetas?: boolean;
 }
 
-/** Seleção de vários bairros: lista com caixas de marcação e busca por nome. */
+/** Seleção de vários bairros, com o total de imóveis de cada um. */
 export function SelectBairros({
   id,
   label = "Bairros",
@@ -175,127 +350,55 @@ export function SelectBairros({
   className,
   comEtiquetas,
 }: SelectBairrosProps) {
-  const [aberto, setAberto] = useState(false);
-  const [termo, setTermo] = useState("");
-  const escolhidos = new Set(valor);
-  const nomes = bairros.filter((b) => escolhidos.has(b.slug)).map((b) => b.nome);
-  const normalizar = (s: string) =>
-    s
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase();
-  const visiveis = termo ? bairros.filter((b) => normalizar(b.nome).includes(normalizar(termo))) : bairros;
-  const resumo = !valor.length
-    ? placeholder
-    : valor.length === 1
-      ? (nomes[0] ?? "1 bairro")
-      : `${valor.length} bairros`;
-  const alternar = (slug: string, marcado: boolean) =>
-    onChange(marcado ? [...valor, slug] : valor.filter((v) => v !== slug));
-
   return (
-    <div className={cn("grid gap-1.5", className)}>
-      <Label htmlFor={id}>{label}</Label>
-      <Popover
-        open={aberto}
-        onOpenChange={(v) => {
-          setAberto(v);
-          if (!v) setTermo("");
-        }}
-      >
-        <PopoverTrigger asChild>
-          <button
-            id={id}
-            type="button"
-            disabled={desabilitado || carregando}
-            aria-haspopup="dialog"
-            aria-expanded={aberto}
-            className="bg-card focus-visible:border-ring focus-visible:ring-ring/50 flex h-10 w-full items-center justify-between gap-2 rounded-md border px-3 text-left text-sm shadow-xs transition-colors outline-none focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {carregando ? (
-              <span className="text-muted-foreground flex items-center gap-2">
-                <LoaderCircle className="size-4 animate-spin" aria-hidden /> Carregando...
-              </span>
-            ) : (
-              <span className={cn("truncate", !valor.length && "text-muted-foreground")}>{resumo}</span>
-            )}
-            <ChevronDown className="text-muted-foreground size-4 shrink-0" aria-hidden />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-64 p-0">
-          {bairros.length > 8 && (
-            <div className="relative border-b p-2">
-              <Search
-                className="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2"
-                aria-hidden
-              />
-              <Input
-                value={termo}
-                onChange={(e) => setTermo(e.target.value)}
-                placeholder="Buscar bairro"
-                aria-label="Buscar bairro"
-                className="h-9 pl-8"
-                autoFocus
-              />
-            </div>
-          )}
-          <ul className="max-h-72 overflow-y-auto p-1" aria-label={label}>
-            {visiveis.map((b) => {
-              const marcado = escolhidos.has(b.slug);
-              return (
-                <li key={b.slug}>
-                  <label className="hover:bg-muted flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm">
-                    <Checkbox checked={marcado} onCheckedChange={(v) => alternar(b.slug, v === true)} />
-                    <span className="flex-1 truncate">{b.nome}</span>
-                    <span className="text-muted-foreground text-xs tabular-nums">{b.total_imoveis}</span>
-                  </label>
-                </li>
-              );
-            })}
-            {!visiveis.length && (
-              <li className="text-muted-foreground px-2 py-6 text-center text-sm">
-                Nenhum bairro encontrado.
-              </li>
-            )}
-          </ul>
-          <div className="flex items-center justify-between gap-2 border-t p-2">
-            <button
-              type="button"
-              onClick={() => onChange([])}
-              disabled={!valor.length}
-              className="text-muted-foreground hover:text-foreground rounded-md px-2 py-1 text-sm disabled:opacity-50"
-            >
-              Limpar
-            </button>
-            <button
-              type="button"
-              onClick={() => setAberto(false)}
-              className="bg-brand text-brand-foreground flex items-center gap-1 rounded-md px-3 py-1 text-sm font-medium"
-            >
-              <Check className="size-4" aria-hidden />
-              {valor.length ? `Pronto (${valor.length})` : "Pronto"}
-            </button>
-          </div>
-        </PopoverContent>
-      </Popover>
-      {comEtiquetas && valor.length > 0 && (
-        <ul className="flex flex-wrap gap-1.5" aria-label="Bairros escolhidos">
-          {valor.map((slug) => (
-            <li key={slug}>
-              <button
-                type="button"
-                onClick={() => alternar(slug, false)}
-                className="bg-brand-soft text-brand hover:bg-brand/15 flex items-center gap-1 rounded-full px-2.5 py-1 text-xs"
-                aria-label={`Remover ${bairros.find((b) => b.slug === slug)?.nome ?? slug}`}
-              >
-                {bairros.find((b) => b.slug === slug)?.nome ?? slug}
-                <X className="size-3" aria-hidden />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    <MultiSelect
+      id={id}
+      label={label}
+      options={bairros.map((b) => ({ value: b.slug, label: b.nome, hint: b.total_imoveis }))}
+      value={valor}
+      onChange={onChange}
+      noun={["bairro", "bairros"]}
+      placeholder={placeholder}
+      searchPlaceholder="Buscar bairro"
+      emptyMessage="Nenhum bairro encontrado."
+      loading={carregando}
+      disabled={desabilitado}
+      className={className}
+      withTags={comEtiquetas}
+    />
+  );
+}
+
+/** Seleção de vários tipos de imóvel (casa, apartamento, terreno...). */
+export function PropertyTypeSelect({
+  id,
+  types,
+  value,
+  onChange,
+  className,
+  withTags,
+}: {
+  id: string;
+  types: ImovelTipo[];
+  value: string[];
+  onChange: (slugs: string[]) => void;
+  className?: string;
+  withTags?: boolean;
+}) {
+  return (
+    <MultiSelect
+      id={id}
+      label="Tipo de imóvel"
+      options={types.map((t) => ({ value: t.slug, label: t.nome }))}
+      value={value}
+      onChange={onChange}
+      noun={["tipo", "tipos"]}
+      placeholder="Todos os tipos"
+      searchPlaceholder="Buscar tipo"
+      emptyMessage="Nenhum tipo encontrado."
+      className={className}
+      withTags={withTags}
+    />
   );
 }
 
@@ -338,44 +441,50 @@ export function SeletorObjetivo({
   );
 }
 
-const QUARTOS = [
-  { valor: 1, label: "1" },
-  { valor: 2, label: "2" },
-  { valor: 3, label: "3" },
-  { valor: 4, label: "4+" },
+// ------------------------------------------------------------ quartos / vagas
+
+/** Opções de quartos e de vagas: 1, 2, 3 e "4+" (4 significa quatro ou mais). */
+const COUNT_OPTIONS = [
+  { value: 1, label: "1" },
+  { value: 2, label: "2" },
+  { value: 3, label: "3" },
+  { value: 4, label: "4+" },
 ];
 
-export function ChipsQuartos({
-  valor = [],
+/** Chips de contagem com várias escolhas ao mesmo tempo (quartos, vagas de garagem). */
+export function CountChips({
+  label,
+  value = [],
   onChange,
   className,
 }: {
-  valor?: number[];
+  label: string;
+  value?: number[];
   onChange: (v: number[]) => void;
   className?: string;
 }) {
   return (
     <div className={cn("grid gap-1.5", className)}>
-      <span className="text-sm leading-none font-medium">Quartos</span>
-      <div role="group" aria-label="Quartos" className="flex gap-1.5">
-        {QUARTOS.map((q) => {
-          const ativo = valor.includes(q.valor);
+      <span className="text-sm leading-none font-medium">{label}</span>
+      <div role="group" aria-label={label} className="flex gap-1.5">
+        {COUNT_OPTIONS.map((o) => {
+          const active = value.includes(o.value);
           return (
             <button
-              key={q.valor}
+              key={o.value}
               type="button"
-              aria-pressed={ativo}
+              aria-pressed={active}
               onClick={() =>
-                onChange(ativo ? valor.filter((v) => v !== q.valor) : [...valor, q.valor].sort())
+                onChange(active ? value.filter((v) => v !== o.value) : [...value, o.value].sort())
               }
               className={cn(
                 "focus-visible:ring-ring/50 h-10 min-w-10 flex-1 rounded-lg border text-sm font-medium transition-colors focus-visible:ring-3 focus-visible:outline-none",
-                ativo
+                active
                   ? "border-brand bg-brand text-brand-foreground"
                   : "border-input bg-card text-foreground hover:border-brand/50 hover:bg-brand-soft/60",
               )}
             >
-              {q.label}
+              {o.label}
             </button>
           );
         })}
@@ -384,38 +493,91 @@ export function ChipsQuartos({
   );
 }
 
-const VAGAS = [1, 2, 3, 4, 5]
-  .map((n) => ({ valor: String(n), label: `${n} ${n === 1 ? "vaga" : "vagas"}` }))
-  .concat([{ valor: "6", label: "6 ou mais" }]);
-
-export function SelectVagas({
-  id = "f-vagas",
-  valor,
-  onChange,
-  className,
-}: {
-  id?: string;
-  valor?: number;
-  onChange: (v: number | undefined) => void;
-  className?: string;
-}) {
-  return (
-    <SelectCampo
-      id={id}
-      label="Vagas de garagem"
-      valor={valor ? String(valor) : undefined}
-      onChange={(v) => onChange(v ? Number(v) : undefined)}
-      opcoes={VAGAS}
-      placeholder="Qualquer"
-      className={className}
-    />
-  );
-}
-
 export const CONDOMINIO = [
   { valor: "dentro", label: "Dentro de condomínio" },
   { valor: "fora", label: "Fora de condomínio" },
 ];
+
+// ------------------------------------------------------------------- números
+
+const inteiro = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
+
+/** "1.250.000" → 1250000; vazio ou zero → undefined. */
+function lerInteiro(texto: string) {
+  const digitos = texto.replace(/\D/g, "");
+  const n = Number(digitos);
+  return digitos && n > 0 ? n : undefined;
+}
+
+// ---------------------------------------------------------------------- área
+
+/**
+ * Área em m², mínima e máxima. A API compara com a área total e, quando o anúncio
+ * não a informa, com a construída.
+ */
+export function AreaRange({
+  id,
+  min,
+  max,
+  onChange,
+  className,
+}: {
+  id: string;
+  min?: number;
+  max?: number;
+  onChange: (min: number | undefined, max: number | undefined) => void;
+  className?: string;
+}) {
+  return (
+    <div className={cn("grid gap-1.5", className)}>
+      <Label htmlFor={`${id}-min`}>Área (m²)</Label>
+      <div className="flex items-center gap-2">
+        <AreaInput id={`${id}-min`} label="Área mínima" placeholder="Mínima" value={min} onChange={(v) => onChange(v, max)} />
+        <span className="text-muted-foreground text-sm" aria-hidden>
+          —
+        </span>
+        <AreaInput id={`${id}-max`} label="Área máxima" placeholder="Máxima" value={max} onChange={(v) => onChange(min, v)} />
+      </div>
+    </div>
+  );
+}
+
+function AreaInput({
+  id,
+  label,
+  placeholder,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  placeholder: string;
+  value?: number;
+  onChange: (v: number | undefined) => void;
+}) {
+  return (
+    <div className="relative min-w-0 flex-1">
+      <Input
+        id={id}
+        inputMode="numeric"
+        autoComplete="off"
+        aria-label={label}
+        placeholder={placeholder}
+        value={value ? inteiro.format(value) : ""}
+        onChange={(e) => onChange(lerInteiro(e.target.value))}
+        className="bg-card h-10 pr-9 tabular-nums"
+      />
+      <span
+        className="text-muted-foreground pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm"
+        aria-hidden
+      >
+        m²
+      </span>
+    </div>
+  );
+}
+
+// --------------------------------------------------------------------- preço
 
 interface FaixaPrecoProps {
   objetivo: Objetivo;
@@ -426,15 +588,6 @@ interface FaixaPrecoProps {
   className?: string;
   /** Campos e slider na mesma linha em telas largas (hero da home). */
   emLinha?: boolean;
-}
-
-const inteiro = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
-
-/** "1.250.000" → 1250000; vazio ou zero → undefined. */
-function lerPreco(texto: string) {
-  const digitos = texto.replace(/\D/g, "");
-  const n = Number(digitos);
-  return digitos && n > 0 ? n : undefined;
 }
 
 function CampoPreco({
@@ -465,7 +618,7 @@ function CampoPreco({
         aria-label={rotulo}
         placeholder={placeholder}
         value={valor ? inteiro.format(valor) : ""}
-        onChange={(e) => onChange(lerPreco(e.target.value))}
+        onChange={(e) => onChange(lerInteiro(e.target.value))}
         className="bg-card h-10 pl-9 tabular-nums"
       />
     </div>
