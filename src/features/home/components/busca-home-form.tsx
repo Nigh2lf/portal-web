@@ -62,7 +62,11 @@ export function BuscaHomeForm({ tipos, cidades, bairrosIniciais, exibirCidade, c
       </div>
 
       <div
-        className={exibirCidade ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-4" : "grid gap-3 sm:grid-cols-3"}
+        className={
+          exibirCidade
+            ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-5"
+            : "grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+        }
       >
         <SelectCampo
           id="h-tipo"
@@ -99,23 +103,22 @@ export function BuscaHomeForm({ tipos, cidades, bairrosIniciais, exibirCidade, c
           opcoes={CONDOMINIO}
           placeholder="Indiferente"
         />
+        <ChipsQuartos valor={estado.quartos} onChange={(q) => set({ quartos: q })} />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-end">
-        <ChipsQuartos valor={estado.quartos} onChange={(q) => set({ quartos: q })} className="lg:w-56" />
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
         <FaixaPreco
           objetivo={estado.objetivo}
           maximo={10000000}
           valorMin={estado.valor_min}
           valorMax={estado.valor_max}
           onChange={(min, max) => set({ valor_min: min, valor_max: max })}
-          className="lg:px-4"
+          emLinha
         />
         <Button
           type="submit"
-          size="lg"
           disabled={pendente}
-          className="bg-cta text-cta-foreground hover:bg-cta/90 w-full lg:w-auto lg:px-8"
+          className="bg-cta text-cta-foreground hover:bg-cta/90 h-10 w-full lg:w-auto lg:px-8"
         >
           {pendente ? (
             <LoaderCircle data-icon="inline-start" className="animate-spin" />

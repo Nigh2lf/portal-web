@@ -424,6 +424,52 @@ interface FaixaPrecoProps {
   valorMax?: number;
   onChange: (min: number | undefined, max: number | undefined) => void;
   className?: string;
+  /** Campos e slider na mesma linha em telas largas (hero da home). */
+  emLinha?: boolean;
+}
+
+const inteiro = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
+
+/** "1.250.000" → 1250000; vazio ou zero → undefined. */
+function lerPreco(texto: string) {
+  const digitos = texto.replace(/\D/g, "");
+  const n = Number(digitos);
+  return digitos && n > 0 ? n : undefined;
+}
+
+function CampoPreco({
+  id,
+  rotulo,
+  placeholder,
+  valor,
+  onChange,
+}: {
+  id: string;
+  rotulo: string;
+  placeholder: string;
+  valor?: number;
+  onChange: (v: number | undefined) => void;
+}) {
+  return (
+    <div className="relative min-w-0 flex-1">
+      <span
+        className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm"
+        aria-hidden
+      >
+        R$
+      </span>
+      <Input
+        id={id}
+        inputMode="numeric"
+        autoComplete="off"
+        aria-label={rotulo}
+        placeholder={placeholder}
+        value={valor ? inteiro.format(valor) : ""}
+        onChange={(e) => onChange(lerPreco(e.target.value))}
+        className="bg-card h-10 pl-9 tabular-nums"
+      />
+    </div>
+  );
 }
 
 function indiceMin(degraus: number[], valor?: number) {
@@ -441,8 +487,20 @@ function indiceMax(degraus: number[], valor?: number) {
   return i === -1 ? degraus.length - 1 : i;
 }
 
-/** Slider não linear de preço (degraus do legado), aplicado sobre o preço da aba ativa. */
-export function FaixaPreco({ objetivo, maximo, valorMin, valorMax, onChange, className }: FaixaPrecoProps) {
+/**
+ * Faixa de preço: campos para digitar o mínimo e o máximo mais um slider não linear
+ * (degraus do legado). Os dois ficam sincronizados; um valor digitado fora dos degraus
+ * vale como foi digitado, e o slider mostra o degrau mais próximo.
+ */
+export function FaixaPreco({
+  objetivo,
+  maximo,
+  valorMin,
+  valorMax,
+  onChange,
+  className,
+  emLinha,
+}: FaixaPrecoProps) {
   const degraus = degrausPreco(objetivo, maximo);
   const ultimo = degraus.length - 1;
   const a = indiceMin(degraus, valorMin);
@@ -451,25 +509,51 @@ export function FaixaPreco({ objetivo, maximo, valorMin, valorMax, onChange, cla
   const rotuloMax = b === ultimo ? "Sem limite" : formatarMoeda(degraus[b]);
 
   return (
-    <div className={cn("grid gap-2", className)}>
+    <div className={cn("grid gap-1.5", className)}>
       <div className="flex items-center justify-between text-sm">
         <span className="leading-none font-medium">Faixa de preço</span>
-        <span className="text-muted-foreground text-xs tabular-nums">
-          {rotuloMin} — {rotuloMax}
-        </span>
+        {!emLinha && (
+          <span className="text-muted-foreground text-xs tabular-nums">
+            {rotuloMin} — {rotuloMax}
+          </span>
+        )}
       </div>
-      <Slider
-        min={0}
-        max={ultimo}
-        step={1}
-        minStepsBetweenThumbs={1}
-        value={[a, b]}
-        onValueChange={([na, nb]) =>
-          onChange(na === 0 ? undefined : degraus[na], nb === ultimo ? undefined : degraus[nb])
-        }
-        aria-label="Faixa de preço"
-        className="py-2 **:data-[slot=slider-thumb]:size-4 **:data-[slot=slider-track]:h-1.5"
-      />
+      <div className={cn("grid gap-2", emLinha && "lg:flex lg:items-center lg:gap-4")}>
+        <div className={cn("flex items-center gap-2", emLinha && "lg:w-[22rem] lg:shrink-0")}>
+          <CampoPreco
+            id={`preco-min-${objetivo}`}
+            rotulo="Preço mínimo"
+            placeholder="Mínimo"
+            valor={valorMin}
+            onChange={(v) => onChange(v, valorMax)}
+          />
+          <span className="text-muted-foreground text-sm" aria-hidden>
+            —
+          </span>
+          <CampoPreco
+            id={`preco-max-${objetivo}`}
+            rotulo="Preço máximo"
+            placeholder="Sem limite"
+            valor={valorMax}
+            onChange={(v) => onChange(valorMin, v)}
+          />
+        </div>
+        <Slider
+          min={0}
+          max={ultimo}
+          step={1}
+          minStepsBetweenThumbs={1}
+          value={[a, b]}
+          onValueChange={([na, nb]) =>
+            onChange(na === 0 ? undefined : degraus[na], nb === ultimo ? undefined : degraus[nb])
+          }
+          aria-label="Faixa de preço"
+          className={cn(
+            "py-2 **:data-[slot=slider-thumb]:size-4 **:data-[slot=slider-track]:h-1.5",
+            emLinha && "lg:min-w-0 lg:flex-1 lg:px-2",
+          )}
+        />
+      </div>
     </div>
   );
 }

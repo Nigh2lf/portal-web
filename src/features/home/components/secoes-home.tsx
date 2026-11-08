@@ -25,7 +25,7 @@ export function HeroHome({ portal, home, busca }: { portal: Portal; home: HomeTo
             Mais de <strong className="font-semibold text-brand-foreground">{formatarNumero(home.total_imoveis)}</strong> imóveis anunciados por imobiliárias, corretores e proprietários da região.
           </p>
         </div>
-        <div className="mx-auto mt-8 max-w-5xl text-foreground">
+        <div className="mt-8 text-foreground">
           <BuscaHomeForm {...busca} />
         </div>
       </Container>
