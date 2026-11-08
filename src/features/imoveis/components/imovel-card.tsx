@@ -1,12 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Camera, Crown, ImageOff, MapPin, Star } from "lucide-react";
+import { Crown, MapPin, Star } from "lucide-react";
 import type { ImovelResumo, Objetivo } from "@/lib/api/types";
 import { Badge } from "@/components/ui/badge";
 import { FavoritoButton } from "@/features/favoritos/components/favorito-button";
 import { ContatarButton } from "@/features/contatar/components/contatar-dialog";
 import { iniciais } from "@/lib/utils/format";
 import { cn } from "@/lib/utils";
+import { CardPhotos } from "./card-photos";
 import { CaracteristicasIcones } from "./caracteristicas-icones";
 import { PrecoImovel, objetivoExibido, objetivosDisponiveis } from "./preco-imovel";
 
@@ -57,27 +58,15 @@ export function ImovelCard({
       )}
     >
       <div className={cn("bg-muted relative aspect-[4/3] overflow-hidden", alternavel && LISTA.foto)}>
-        <Link href={href} className="absolute inset-0" aria-label={imovel.titulo} tabIndex={-1}>
-          {imovel.foto_principal_url ? (
-            <Image
-              src={imovel.foto_principal_url}
-              alt={imovel.titulo}
-              fill
-              priority={prioridade}
-              sizes="(min-width: 1280px) 400px, (min-width: 640px) 50vw, 100vw"
-              className="object-cover transition-transform duration-500 group-hover:scale-105"
-            />
-          ) : (
-            <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-2">
-              <ImageOff className="size-8" aria-hidden />
-              <span className="text-xs">Sem foto</span>
-            </div>
-          )}
-          <div
-            className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/75 via-black/25 to-transparent"
-            aria-hidden
-          />
-        </Link>
+        <CardPhotos
+          slug={imovel.slug}
+          href={href}
+          title={imovel.titulo}
+          coverUrl={imovel.foto_principal_url}
+          total={imovel.total_fotos}
+          priority={prioridade}
+          sizes="(min-width: 1280px) 400px, (min-width: 640px) 50vw, 100vw"
+        />
 
         <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start justify-between gap-2">
           <div className="flex flex-wrap gap-1.5">
@@ -109,14 +98,9 @@ export function ImovelCard({
           )}
         </div>
 
-        <div className="pointer-events-none absolute inset-x-4 bottom-3 flex items-end justify-between gap-3 text-white">
+        {/* O contador de fotos fica no canto direito, dentro de `CardPhotos`. */}
+        <div className="pointer-events-none absolute inset-x-4 bottom-3 flex items-end justify-between gap-3 pr-16 text-white">
           <PrecoImovel precos={imovel} objetivo={obj} tamanho="md" comRotulo className="drop-shadow" />
-          {imovel.total_fotos > 0 && (
-            <span className="flex items-center gap-1 rounded-md bg-black/40 px-1.5 py-0.5 text-xs backdrop-blur-sm">
-              <Camera className="size-3.5" aria-hidden />
-              {imovel.total_fotos}
-            </span>
-          )}
         </div>
       </div>
 

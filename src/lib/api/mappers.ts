@@ -19,6 +19,7 @@ import type {
   EstatisticaMensal,
   EstatisticaPeriodo,
   Imovel,
+  ImovelFoto,
   ImovelPayload,
   ImovelResumo,
   ImovelTaxa,
@@ -393,10 +394,17 @@ export function mapAnuncianteResumo(a: ApiAdvertiser): AnuncianteResumo {
   };
 }
 
+export type ApiPhoto = ApiPropertyDetail["photos"][number];
+
+/** Foto da API: `url` é a foto cheia, `mini_url` a miniatura (ou a própria foto, se não houver). */
+export function mapPhoto(f: ApiPhoto): ImovelFoto {
+  return { id: f.id, url: f.url ?? f.thumbnail_url ?? "", mini_url: f.thumbnail_url ?? f.url ?? "", ordem: f.sort_order, principal: f.is_cover };
+}
+
 export function mapImovel(p: ApiPropertyDetail, portalId: string): Imovel {
   const fotos = [...p.photos]
     .sort((a, b) => a.sort_order - b.sort_order)
-    .map((f) => ({ id: f.id, url: f.url ?? f.thumbnail_url ?? "", mini_url: f.thumbnail_url ?? f.url ?? "", ordem: f.sort_order, principal: f.is_cover }));
+    .map(mapPhoto);
   const capa = fotos.find((f) => f.principal) ?? fotos[0];
   return {
     id: p.id,
@@ -822,7 +830,7 @@ export function mapUsoPlano(u: ApiPlanUsage): UsoPlano {
 export function mapImovelPainel(p: ApiPropertyPainel, anuncianteId = ""): Imovel {
   const fotos = [...p.photos]
     .sort((a, b) => a.sort_order - b.sort_order)
-    .map((f) => ({ id: f.id, url: f.url ?? f.thumbnail_url ?? "", mini_url: f.thumbnail_url ?? f.url ?? "", ordem: f.sort_order, principal: f.is_cover }));
+    .map(mapPhoto);
   return {
     id: p.id,
     codigo: p.reference_code,

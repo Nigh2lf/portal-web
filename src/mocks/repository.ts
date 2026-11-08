@@ -267,6 +267,15 @@ export class MockRepository implements PortalRepository {
       });
   }
 
+  async listPropertyPhotos(portalId: string, slugOuId: string) {
+    const portal = this.portal(portalId);
+    const imovel = this.publicadosDoPortal(portal).find(
+      (i) => i.slug === slugOuId || i.id === slugOuId || i.codigo.toLowerCase() === slugOuId.toLowerCase(),
+    );
+    if (!imovel) return [];
+    return [...imovel.fotos].sort((a, b) => Number(b.principal) - Number(a.principal) || a.ordem - b.ordem);
+  }
+
   async listRelacionados(portalId: string, slugOuId: string) {
     const portal = this.portal(portalId);
     const imovel = getStore().imoveis.find((i) => i.slug === slugOuId || i.id === slugOuId || i.codigo.toLowerCase() === slugOuId.toLowerCase());

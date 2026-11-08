@@ -38,6 +38,7 @@ import {
   contatoParaApi,
   encomendaParaApi,
   filtrosMeusImoveisParaApi,
+  mapPhoto,
   filtrosParaApi,
   imovelParaApi,
   leadSiteParaApi,
@@ -89,6 +90,7 @@ import {
   type ApiPropertyCard,
   type ApiPropertyDetail,
   type ApiPropertyPainel,
+  type ApiPhoto,
   type ApiPropertyRequest,
   type ApiPropertyType,
   type ApiRelatedLink,
@@ -402,6 +404,20 @@ export class HttpRepository implements PortalRepository {
         revalidate: 900,
       });
       return lista.map(mapImovelResumo);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return [];
+      throw e;
+    }
+  }
+
+  async listPropertyPhotos(portalId: string, slugOuId: string) {
+    const slug = await this.slugDoPortal(portalId);
+    try {
+      const photos = await this.request<ApiPhoto[]>(
+        `/public/portals/${slug}/properties/${encodeURIComponent(slugOuId)}/photos/`,
+        { tags: tagsCache("listing", slug), revalidate: 900 },
+      );
+      return photos.map(mapPhoto);
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) return [];
       throw e;

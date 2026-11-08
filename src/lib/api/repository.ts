@@ -17,6 +17,7 @@ import type {
   HomeDados,
   HomeTopo,
   Imovel,
+  ImovelFoto,
   ImovelPayload,
   ImovelResumo,
   ImovelTipo,
@@ -79,6 +80,8 @@ export interface PortalRepository {
   listDestaques(portalId: string): Promise<ImovelResumo[]>;
   listBairrosMaisAnunciados(portalId: string): Promise<BairroMaisAnunciado[]>;
   listRelacionados(portalId: string, slugOuId: string): Promise<ImovelResumo[]>;
+  /** Fotos do imóvel, capa primeiro: o card da listagem busca só quando o visitante passa as fotos. */
+  listPropertyPhotos(portalId: string, slugOuId: string): Promise<ImovelFoto[]>;
   buscarImoveis(portalId: string, filtros: BuscaFiltros): Promise<BuscaResultado>;
   getImovel(portalId: string, slugOuId: string, opts?: { preview?: boolean; anuncianteId?: string }): Promise<ImovelDetalhe | null>;
   listImoveisPorIds(portalId: string, ids: string[]): Promise<ImovelResumo[]>;
