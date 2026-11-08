@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import Image from "next/image";
-import { ChevronLeft, ChevronRight, Expand, ImageOff, Images } from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Expand, ImageOff, Images, X } from "lucide-react";
+import { Dialog as DialogPrimitive } from "radix-ui";
 import type { ImovelFoto } from "@/lib/api/types";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { PhotoSlider, PhotoThumbnails } from "./photo-slider";
 
 interface Props {
   fotos: ImovelFoto[];
@@ -14,29 +14,28 @@ interface Props {
   destaque?: boolean;
 }
 
-export function GaleriaImovel({ fotos, titulo }: Props) {
-  const ordenadas = [...fotos].sort((a, b) => Number(b.principal) - Number(a.principal) || a.ordem - b.ordem);
-  const [indice, setIndice] = useState(0);
-  const [aberto, setAberto] = useState(false);
-  const total = ordenadas.length;
+const lightboxArrowClass =
+  "absolute top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-colors hover:bg-black/70 focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:outline-none sm:size-12";
 
-  const ir = useCallback(
+export function GaleriaImovel({ fotos, titulo }: Props) {
+  const photos = useMemo(
+    () => [...fotos].sort((a, b) => Number(b.principal) - Number(a.principal) || a.ordem - b.ordem),
+    [fotos],
+  );
+  const [index, setIndex] = useState(0);
+  const [open, setOpen] = useState(false);
+  const expandButtonRef = useRef<HTMLButtonElement>(null);
+  const total = photos.length;
+
+  const go = useCallback(
     (delta: number) => {
-      if (!total) return;
-      setIndice((i) => (i + delta + total) % total);
+      if (total < 2) return;
+      setIndex((i) => (i + delta + total) % total);
     },
     [total],
   );
 
-  useEffect(() => {
-    if (!aberto) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight") ir(1);
-      if (e.key === "ArrowLeft") ir(-1);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [aberto, ir]);
+  const altFor = useCallback((i: number) => `${titulo} — foto ${i + 1} de ${total}`, [titulo, total]);
 
   if (!total) {
     return (
@@ -47,90 +46,114 @@ export function GaleriaImovel({ fotos, titulo }: Props) {
     );
   }
 
-  const atual = ordenadas[indice]!;
-
   return (
     <div className="space-y-3">
-      <div className="relative aspect-[16/10] overflow-hidden rounded-2xl bg-muted">
-        <button type="button" onClick={() => setAberto(true)} className="group absolute inset-0 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none" aria-label="Ampliar foto">
-          <Image key={atual.id} src={atual.url} alt={`${titulo} — foto ${indice + 1} de ${total}`} fill priority sizes="(min-width: 1024px) 800px, 100vw" className="object-cover transition-transform duration-500 group-hover:scale-[1.02]" />
-          <span className="absolute right-3 bottom-3 flex items-center gap-1.5 rounded-lg bg-black/55 px-2.5 py-1.5 text-xs font-medium text-white backdrop-blur-sm">
-            <Expand className="size-3.5" aria-hidden />
-            Ampliar
-          </span>
-          <span className="absolute left-3 bottom-3 flex items-center gap-1.5 rounded-lg bg-black/55 px-2.5 py-1.5 text-xs font-medium text-white backdrop-blur-sm">
-            <Images className="size-3.5" aria-hidden />
-            {indice + 1} / {total}
-          </span>
+      <div className="relative aspect-[16/10] overflow-hidden rounded-2xl bg-muted text-muted-foreground">
+        <PhotoSlider
+          className="absolute inset-0"
+          photos={photos}
+          index={index}
+          onIndexChange={setIndex}
+          altFor={altFor}
+          fit="cover"
+          sizes="(min-width: 1024px) 800px, 100vw"
+          priority
+          onPhotoClick={() => setOpen(true)}
+          photoClickLabel="Ampliar foto"
+        />
+        <span className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-1.5 rounded-lg bg-black/55 px-2.5 py-1.5 text-xs font-medium text-white tabular-nums backdrop-blur-sm">
+          <Images className="size-3.5" aria-hidden />
+          {index + 1} / {total}
+        </span>
+        <button
+          ref={expandButtonRef}
+          type="button"
+          onClick={() => setOpen(true)}
+          className="absolute right-3 bottom-3 flex items-center gap-1.5 rounded-lg bg-black/55 px-2.5 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-black/75 focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:outline-none"
+        >
+          <Expand className="size-3.5" aria-hidden />
+          Ampliar
         </button>
         {total > 1 && (
           <>
-            <Button type="button" variant="secondary" size="icon" onClick={() => ir(-1)} aria-label="Foto anterior" className="absolute top-1/2 left-3 -translate-y-1/2 rounded-full bg-white/90 shadow hover:bg-white">
+            <Button type="button" variant="secondary" size="icon" onClick={() => go(-1)} aria-label="Foto anterior" className="absolute top-1/2 left-3 -translate-y-1/2 rounded-full bg-white/90 shadow hover:bg-white">
               <ChevronLeft />
             </Button>
-            <Button type="button" variant="secondary" size="icon" onClick={() => ir(1)} aria-label="Próxima foto" className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full bg-white/90 shadow hover:bg-white">
+            <Button type="button" variant="secondary" size="icon" onClick={() => go(1)} aria-label="Próxima foto" className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full bg-white/90 shadow hover:bg-white">
               <ChevronRight />
             </Button>
           </>
         )}
       </div>
 
-      {total > 1 && (
-        <ul className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]" aria-label="Miniaturas">
-          {ordenadas.map((f, i) => (
-            <li key={f.id} className="shrink-0">
-              <button
-                type="button"
-                onClick={() => setIndice(i)}
-                aria-label={`Ver foto ${i + 1}`}
-                aria-current={i === indice}
-                className={cn("relative block h-16 w-24 overflow-hidden rounded-lg ring-2 ring-offset-2 ring-offset-background transition-all sm:h-20 sm:w-28", i === indice ? "ring-brand" : "ring-transparent opacity-70 hover:opacity-100")}
-              >
-                <Image src={f.mini_url} alt="" fill sizes="112px" className="object-cover" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      {total > 1 && <PhotoThumbnails photos={photos} index={index} onSelect={setIndex} tone="light" />}
 
-      <Dialog open={aberto} onOpenChange={setAberto}>
-        <DialogContent showCloseButton className="h-[100dvh] max-h-none w-screen max-w-none! rounded-none border-0 bg-black/95 p-0 text-white ring-0 sm:h-[92dvh] sm:w-[96vw] sm:rounded-2xl [&_[data-slot=dialog-close]]:text-white [&_[data-slot=dialog-close]]:hover:bg-white/10 [&_[data-slot=dialog-close]]:hover:text-white">
-          <DialogTitle className="sr-only">{titulo}</DialogTitle>
-          <DialogDescription className="sr-only">Galeria de fotos. Use as setas do teclado para navegar.</DialogDescription>
-          <div className="relative flex h-full flex-col">
-            <div className="relative flex-1">
-              <Image key={`lb-${atual.id}`} src={atual.url} alt={`${titulo} — foto ${indice + 1} de ${total}`} fill sizes="100vw" className="object-contain" />
-            </div>
-            {total > 1 && (
-              <>
-                <Button type="button" variant="ghost" size="icon-lg" onClick={() => ir(-1)} aria-label="Foto anterior" className="absolute top-1/2 left-2 -translate-y-1/2 rounded-full text-white hover:bg-white/15 hover:text-white sm:left-4">
-                  <ChevronLeft className="size-7" />
-                </Button>
-                <Button type="button" variant="ghost" size="icon-lg" onClick={() => ir(1)} aria-label="Próxima foto" className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full text-white hover:bg-white/15 hover:text-white sm:right-4">
-                  <ChevronRight className="size-7" />
-                </Button>
-              </>
-            )}
-            <div className="flex items-center justify-between gap-4 px-4 py-3 text-xs text-white/80">
-              <span className="truncate">{titulo}</span>
-              <span className="shrink-0 tabular-nums">
-                {indice + 1} / {total}
+      <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0" />
+          <DialogPrimitive.Content
+            onKeyDown={(e) => {
+              if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+                e.preventDefault();
+                go(e.key === "ArrowRight" ? 1 : -1);
+              }
+            }}
+            onCloseAutoFocus={(e) => {
+              // A foto que abriu a tela cheia pode ter saído de vista: o foco volta para "Ampliar".
+              e.preventDefault();
+              expandButtonRef.current?.focus({ preventScroll: true });
+            }}
+            className="fixed inset-0 z-50 flex flex-col bg-black text-white outline-none data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
+          >
+            <DialogPrimitive.Title className="sr-only">{titulo}</DialogPrimitive.Title>
+            <DialogPrimitive.Description className="sr-only">
+              Galeria de fotos. Arraste para os lados ou use as setas para navegar.
+            </DialogPrimitive.Description>
+
+            <div className="flex shrink-0 items-center gap-3 py-2 pr-2 pl-4 pt-[max(0.5rem,env(safe-area-inset-top))] sm:pr-3 sm:pl-5">
+              <span className="text-sm font-medium tabular-nums">
+                {index + 1} / {total}
               </span>
+              <p className="min-w-0 flex-1 truncate text-sm text-white/70">{titulo}</p>
+              <DialogPrimitive.Close
+                aria-label="Fechar galeria"
+                className="flex size-11 shrink-0 items-center justify-center rounded-full text-white transition-colors hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:outline-none"
+              >
+                <X className="size-6" aria-hidden />
+              </DialogPrimitive.Close>
             </div>
+
+            <div className="relative min-h-0 flex-1">
+              <PhotoSlider
+                className="absolute inset-0 text-white"
+                photos={photos}
+                index={index}
+                onIndexChange={setIndex}
+                altFor={altFor}
+                fit="contain"
+                sizes="100vw"
+              />
+              {total > 1 && (
+                <>
+                  <button type="button" onClick={() => go(-1)} aria-label="Foto anterior" className={cn(lightboxArrowClass, "left-2 sm:left-4")}>
+                    <ChevronLeft className="size-6 sm:size-7" aria-hidden />
+                  </button>
+                  <button type="button" onClick={() => go(1)} aria-label="Próxima foto" className={cn(lightboxArrowClass, "right-2 sm:right-4")}>
+                    <ChevronRight className="size-6 sm:size-7" aria-hidden />
+                  </button>
+                </>
+              )}
+            </div>
+
             {total > 1 && (
-              <ul className="flex gap-2 overflow-x-auto px-4 pb-4 [scrollbar-width:thin]">
-                {ordenadas.map((f, i) => (
-                  <li key={f.id} className="shrink-0">
-                    <button type="button" onClick={() => setIndice(i)} aria-label={`Ver foto ${i + 1}`} className={cn("relative block h-14 w-20 overflow-hidden rounded-md ring-2 transition-all", i === indice ? "ring-white" : "ring-transparent opacity-50 hover:opacity-90")}>
-                      <Image src={f.mini_url} alt="" fill sizes="80px" className="object-cover" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              // Celular deitado: sem miniaturas, a foto ocupa a altura toda.
+              <div className="shrink-0 px-2 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] [@media(max-height:480px)]:hidden">
+                <PhotoThumbnails photos={photos} index={index} onSelect={setIndex} tone="dark" className="justify-center-safe" />
+              </div>
             )}
-          </div>
-        </DialogContent>
-      </Dialog>
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
     </div>
   );
 }

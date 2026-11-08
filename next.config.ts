@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Só em `next dev`: libera os scripts de desenvolvimento para outro endereço, como o
+  // IP da máquina na rede ao testar pelo celular (ex.: DEV_ALLOWED_ORIGINS=192.168.1.4).
+  allowedDevOrigins: process.env.DEV_ALLOWED_ORIGINS?.split(",").map((origin) => origin.trim()).filter(Boolean),
   // Em desenvolvimento, mostra cada fetch da API e se veio do cache (HIT/MISS/SKIP).
   logging: { fetches: { fullUrl: true } },
   images: {
